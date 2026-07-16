@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payment result — Kon-firm</title>
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap nav">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true">K</span>
+      <span class="brand-text">Kon-firm</span>
+    </a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/">Store</a>
+      <a href="/pos">POS</a>
+      <a href="/admin">Admin</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap" style="padding:56px 20px;max-width:660px">
+  <div id="state" aria-live="polite">
+    <div class="empty">
+      <h2 id="headline">Confirming your payment…</h2>
+      <p id="sub">Waiting for Monnify to confirm the transaction.</p>
+    </div>
+  </div>
+
+  <div class="table-wrap" id="receipt" hidden style="margin-top:24px">
+    <table>
+      <caption class="sr-only">Order receipt</caption>
+      <tbody id="receipt-body"></tbody>
+    </table>
+  </div>
+
+  <div class="hero-cta" style="margin-top:28px">
+    <a class="btn" href="/">Back to the store</a>
+    <a class="btn btn-secondary" href="/admin">View in admin</a>
+  </div>
+
+  <p style="font-size:.8rem;color:var(--text-muted);margin-top:28px;border-top:1px solid var(--border);padding-top:16px">
+    <strong>Why this page waits:</strong> returning from Monnify does not by itself
+    mean payment succeeded — a browser redirect can be replayed or hand-typed.
+    This page only reports what the server recorded from Monnify’s
+    signature-verified webhook.
+  </p>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-bottom">
+    <span>© 2026 Kon-firm</span>
+    <span>Built with Monnify Sandbox APIs · Test mode only</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/callback.js" type="module"></script>
+</body>
+</html>

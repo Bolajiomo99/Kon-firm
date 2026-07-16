@@ -1,4 +1,4 @@
-module github.com/konfirm/konfirm/backend
+module github.com/Bolajiomo99/Kon-firm
 
 go 1.26.5
 

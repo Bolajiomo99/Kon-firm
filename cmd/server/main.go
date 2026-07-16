@@ -12,10 +12,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/konfirm/konfirm/backend/internal/api"
-	"github.com/konfirm/konfirm/backend/internal/config"
-	"github.com/konfirm/konfirm/backend/internal/monnify"
-	"github.com/konfirm/konfirm/backend/internal/store"
+	konfirm "github.com/Bolajiomo99/Kon-firm"
+	"github.com/Bolajiomo99/Kon-firm/internal/api"
+	"github.com/Bolajiomo99/Kon-firm/internal/config"
+	"github.com/Bolajiomo99/Kon-firm/internal/monnify"
+	"github.com/Bolajiomo99/Kon-firm/internal/store"
 )
 
 func main() {
@@ -62,7 +63,7 @@ func run(log *slog.Logger) error {
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
-		Handler: api.NewServer(cfg, st, mc, log).Routes(),
+		Handler: api.NewServer(cfg, st, mc, log).Routes(konfirm.Frontend()),
 		// Timeouts are not optional on a public listener: without them a slow
 		// client can hold a connection open indefinitely.
 		ReadHeaderTimeout: 5 * time.Second,

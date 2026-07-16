@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="tumbler">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#11595a"/><stop offset="1" stop-color="#33cdc4"/>
+  </linearGradient></defs>
+  <rect width="200" height="200" fill="#11595a" opacity="0.07"/>
+  <path d="M75 62 h50 l-6 78 a8 8 0 0 1 -8 7 h-22 a8 8 0 0 1 -8 -7 z" fill="none" stroke="url(#g)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><path d="M78 88 h44" fill="none" stroke="url(#g)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

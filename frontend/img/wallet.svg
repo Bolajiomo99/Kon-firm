@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="wallet">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#0f7070"/><stop offset="1" stop-color="#71e3da"/>
+  </linearGradient></defs>
+  <rect width="200" height="200" fill="#0f7070" opacity="0.07"/>
+  <path d="M55 75 h90 a8 8 0 0 1 8 8 v44 a8 8 0 0 1 -8 8 h-90 a8 8 0 0 1 -8 -8 v-44 a8 8 0 0 1 8 -8 z" fill="none" stroke="url(#g)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><path d="M120 97 h33 v20 h-33 a10 10 0 0 1 0 -20 z" fill="none" stroke="url(#g)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

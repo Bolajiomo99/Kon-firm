@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/konfirm/konfirm/backend/internal/monnify"
-	"github.com/konfirm/konfirm/backend/internal/store"
+	"github.com/Bolajiomo99/Kon-firm/internal/monnify"
+	"github.com/Bolajiomo99/Kon-firm/internal/store"
 )
 
 // maxWebhookBody caps how much we will read from an inbound webhook. Without

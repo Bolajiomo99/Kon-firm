@@ -3,13 +3,15 @@ package api
 
 import (
 	"encoding/json"
+	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
-	"github.com/konfirm/konfirm/backend/internal/config"
-	"github.com/konfirm/konfirm/backend/internal/monnify"
-	"github.com/konfirm/konfirm/backend/internal/store"
+	"github.com/Bolajiomo99/Kon-firm/internal/config"
+	"github.com/Bolajiomo99/Kon-firm/internal/monnify"
+	"github.com/Bolajiomo99/Kon-firm/internal/store"
 )
 
 type Server struct {
@@ -41,8 +43,10 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, errorBody{Error: msg})
 }
 
-// Routes builds the HTTP handler.
-func (s *Server) Routes() http.Handler {
+// Routes builds the HTTP handler. frontend is the embedded static site; the
+// API and the pages are served by the same binary on the same origin, which
+// is why there is no CORS configuration anywhere in this project.
+func (s *Server) Routes(frontend fs.FS) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/health", s.handleHealth)
@@ -51,8 +55,41 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/checkout", s.handleCheckout)
 	mux.HandleFunc("GET /api/orders/{reference}", s.handleGetOrder)
 	mux.HandleFunc("POST /api/webhooks/monnify", s.handleMonnifyWebhook)
+	mux.HandleFunc("GET /api/admin/overview", s.handleAdminOverview)
 
-	return s.withLogging(mux)
+	// Everything not under /api is the frontend.
+	mux.Handle("/", newStaticHandler(frontend))
+
+	return s.withSecurityHeaders(s.withLogging(mux))
+}
+
+// withSecurityHeaders applies a conservative baseline to every response.
+//
+// The CSP is strict because it can be: the frontend loads no third-party
+// scripts, fonts, or images, so nothing legitimate needs a wider policy.
+func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
+	csp := strings.Join([]string{
+		"default-src 'self'",
+		"script-src 'self'",
+		"style-src 'self' 'unsafe-inline'", // small inline blocks in the page heads
+		"img-src 'self' data:",
+		"connect-src 'self'",
+		"media-src 'self' blob:", // the POS camera stream
+		"frame-ancestors 'none'",
+		"base-uri 'self'",
+		"form-action 'self' https://sandbox.sdk.monnify.com https://sdk.monnify.com",
+	}, "; ")
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("Content-Security-Policy", csp)
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		h.Set("X-Frame-Options", "DENY")
+		// The camera is needed on /pos and nowhere else.
+		h.Set("Permissions-Policy", "camera=(self), microphone=(), geolocation=()")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {

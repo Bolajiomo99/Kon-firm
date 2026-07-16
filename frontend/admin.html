@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — Kon-firm</title>
+<meta name="description" content="Kon-firm admin: revenue, order history across web and counter, and live inventory.">
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true">K</span>
+      <span class="brand-text">Kon-firm</span>
+    </a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/">Store</a>
+      <a href="/pos">POS</a>
+      <a href="/admin" aria-current="page">Admin</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="wrap" style="padding:32px 20px 0">
+  <div class="section-head">
+    <span class="eyebrow"><span class="dot" aria-hidden="true"></span> Live from Monnify</span>
+    <h1 style="font-size:clamp(1.7rem,4vw,2.4rem)">Admin</h1>
+    <p>Both counters, one set of books. Revenue counts only orders that Monnify
+       confirmed by webhook — a pending cart is intent, not income.</p>
+  </div>
+
+  <div class="error-box" id="error" hidden role="alert"></div>
+
+  <section aria-labelledby="stats-title">
+    <h2 id="stats-title" class="sr-only">Summary</h2>
+    <div class="stats" id="stats" aria-busy="true">
+      <div class="stat"><span class="label">Loading…</span></div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="orders-title" style="padding-bottom:24px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <h2 id="orders-title">Recent orders</h2>
+      <button class="btn btn-sm btn-secondary" id="refresh">Refresh</button>
+    </div>
+    <div class="table-wrap" style="margin-top:14px">
+      <table>
+        <caption class="sr-only">The twenty most recent orders</caption>
+        <thead>
+          <tr>
+            <th scope="col">Reference</th>
+            <th scope="col">Customer</th>
+            <th scope="col">Channel</th>
+            <th scope="col">Status</th>
+            <th scope="col" style="text-align:right">Total</th>
+            <th scope="col">Placed</th>
+          </tr>
+        </thead>
+        <tbody id="orders">
+          <tr><td colspan="6" class="empty">Loading orders…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="inv-title" style="padding-top:0">
+    <h2 id="inv-title">Inventory</h2>
+    <div class="table-wrap" style="margin-top:14px">
+      <table>
+        <caption class="sr-only">Current inventory</caption>
+        <thead>
+          <tr>
+            <th scope="col">SKU</th>
+            <th scope="col">Product</th>
+            <th scope="col">Barcode</th>
+            <th scope="col" style="text-align:right">Price</th>
+            <th scope="col" style="text-align:right">Stock</th>
+          </tr>
+        </thead>
+        <tbody id="inventory">
+          <tr><td colspan="5" class="empty">Loading inventory…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-bottom">
+    <span>© 2026 Kon-firm</span>
+    <span>Built with Monnify Sandbox APIs · Test mode only</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/admin.js" type="module"></script>
+</body>
+</html>

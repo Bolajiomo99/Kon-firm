@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Point of sale — Kon-firm</title>
+<meta name="description" content="Kon-firm point of sale: scan a barcode, take payment through Monnify, and settle against the same inventory as the web store.">
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/app.css">
+<style>
+  .pos-grid { display: grid; grid-template-columns: 1fr 400px; gap: 24px; align-items: start; }
+  .panel { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; }
+  #reader { border-radius: var(--radius); overflow: hidden; background: var(--bg-sunken); min-height: 240px; display: grid; place-items: center; }
+  #reader video { width: 100%; display: block; }
+  .scan-hint { font-size: .84rem; color: var(--text-muted); text-align: center; padding: 28px 16px; }
+  .lines { list-style: none; padding: 0; margin: 0 0 14px; }
+  .lines li { display: flex; gap: 10px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--border); }
+  .lines li .n { flex: 1; min-width: 0; }
+  .lines li .n strong { display: block; font-size: .92rem; }
+  .lines li .n span { font-size: .78rem; color: var(--text-muted); }
+  .barcode-row { display: flex; gap: 8px; }
+  .barcode-row input { flex: 1; }
+  @media (max-width: 920px) { .pos-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true">K</span>
+      <span class="brand-text">Kon-firm</span>
+    </a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/">Store</a>
+      <a href="/pos" aria-current="page">POS</a>
+      <a href="/admin">Admin</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="wrap" style="padding:32px 20px 0">
+  <div class="section-head">
+    <span class="eyebrow"><span class="dot" aria-hidden="true"></span> In-store counter</span>
+    <h1 style="font-size:clamp(1.7rem,4vw,2.4rem)">Point of sale</h1>
+    <p>Scan a product barcode, or type it in. The counter draws on the same
+       inventory as the web store, and settles through the same Monnify
+       transaction flow — one ledger, not two.</p>
+  </div>
+
+  <div class="pos-grid">
+    <section class="panel" aria-labelledby="scan-title">
+      <h2 id="scan-title" style="font-size:1.05rem">Scanner</h2>
+      <div class="error-box" id="scan-error" hidden role="alert"></div>
+
+      <div id="reader">
+        <p class="scan-hint" id="scan-hint">
+          Camera is off. Start the scanner, or type a barcode below.
+        </p>
+      </div>
+
+      <div style="display:flex;gap:8px;margin:14px 0">
+        <button class="btn" id="scan-start">Start scanner</button>
+        <button class="btn btn-secondary" id="scan-stop" disabled>Stop</button>
+      </div>
+
+      <form class="barcode-row" id="manual-form">
+        <div class="field" style="flex:1;margin:0">
+          <label for="barcode" class="sr-only">Barcode</label>
+          <input id="barcode" inputmode="numeric" autocomplete="off" placeholder="Enter barcode, e.g. 6009880012345">
+        </div>
+        <button class="btn btn-secondary" type="submit">Add</button>
+      </form>
+
+      <details style="margin-top:16px">
+        <summary style="cursor:pointer;font-size:.86rem;color:var(--text-muted)">
+          Demo barcodes (no printed labels handy?)
+        </summary>
+        <div id="demo-codes" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px"></div>
+      </details>
+    </section>
+
+    <section class="panel" aria-labelledby="sale-title">
+      <h2 id="sale-title" style="font-size:1.05rem">Current sale</h2>
+      <div class="error-box" id="sale-error" hidden role="alert"></div>
+
+      <ul class="lines" id="lines"><li style="border:0"><span class="scan-hint" style="padding:20px 0">Nothing scanned yet.</span></li></ul>
+
+      <div class="total-row">
+        <span>Total</span>
+        <span class="amount" id="total">₦0.00</span>
+      </div>
+
+      <form id="pay-form">
+        <div class="field">
+          <label for="cust-name">Customer name</label>
+          <input id="cust-name" autocomplete="name" value="Walk-in customer">
+        </div>
+        <div class="field">
+          <label for="cust-email">Email (for the receipt)</label>
+          <input id="cust-email" type="email" autocomplete="email" placeholder="customer@example.com">
+        </div>
+        <button class="btn btn-block btn-lg" id="pay-btn" type="submit" disabled>Take payment</button>
+        <button class="btn btn-block btn-secondary btn-sm" id="clear-btn" type="button" style="margin-top:8px">Clear sale</button>
+      </form>
+    </section>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-bottom">
+    <span>© 2026 Kon-firm</span>
+    <span>Built with Monnify Sandbox APIs · Test mode only</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/pos.js" type="module"></script>
+</body>
+</html>

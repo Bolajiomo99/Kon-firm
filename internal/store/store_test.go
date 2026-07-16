@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/konfirm/konfirm/backend/internal/config"
+	"github.com/Bolajiomo99/Kon-firm/internal/config"
 )
 
 // testStore connects to the database named by DATABASE_URL and applies
