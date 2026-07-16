@@ -1,0 +1,28 @@
+# Secrets — never commit these.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Go
+/backend/bin/
+/backend/server
+*.test
+*.out
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+.vite/
+*.log
+
+# macOS
+.DS_Store
