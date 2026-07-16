@@ -1,0 +1,39 @@
+# Render Blueprint for Kon-firm.
+#
+# One service: a single Go binary serving the API and the embedded frontend.
+# There is no separate frontend host, so there is nothing to keep in sync.
+#
+# Secrets are declared with `sync: false`, which means Render prompts for them
+# in the dashboard rather than reading them from this file. Never put a real
+# key in here — this file is committed.
+
+services:
+  - type: web
+    name: konfirm
+    runtime: go
+    plan: free
+    region: frankfurt # closest free region to Lagos
+    buildCommand: go build -o konfirm ./cmd/server
+    startCommand: ./konfirm
+    healthCheckPath: /api/health
+    envVars:
+      - key: MONNIFY_API_KEY
+        sync: false
+      - key: MONNIFY_SECRET_KEY
+        sync: false
+      - key: MONNIFY_CONTRACT_CODE
+        sync: false
+
+      - key: MONNIFY_BASE_URL
+        value: https://sandbox.monnify.com
+
+      # Must match the deployed URL. Update after the first deploy, once
+      # Render has assigned the hostname.
+      - key: KONFIRM_REDIRECT_URL
+        sync: false
+
+      - key: DATABASE_URL
+        sync: false
+
+      - key: ENV
+        value: production
