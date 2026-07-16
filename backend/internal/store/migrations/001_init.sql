@@ -23,10 +23,18 @@ CREATE INDEX IF NOT EXISTS products_barcode_idx ON products (barcode) WHERE barc
 -- Order lifecycle: pending -> paid | failed | expired.
 -- Only a signature-verified Monnify webhook may move an order to 'paid'.
 -- Nothing the browser sends can transition an order; the client is not trusted.
-CREATE TYPE order_status AS ENUM ('pending', 'paid', 'failed', 'expired');
+--
+-- CREATE TYPE has no IF NOT EXISTS, so guard it to keep this file re-runnable.
+DO $$ BEGIN
+    CREATE TYPE order_status AS ENUM ('pending', 'paid', 'failed', 'expired');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- How the sale originated. This is the "omnichannel" claim, made concrete.
-CREATE TYPE order_channel AS ENUM ('online', 'pos');
+DO $$ BEGIN
+    CREATE TYPE order_channel AS ENUM ('online', 'pos');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS orders (
     id              BIGSERIAL PRIMARY KEY,

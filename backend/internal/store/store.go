@@ -266,12 +266,15 @@ func (s *Store) ApplyWebhook(ctx context.Context, r PaymentResult) (*Order, erro
 	}
 
 	var o Order
+	// The casts on $2 and $5 are load-bearing: inside CASE ... ELSE NULL,
+	// Postgres cannot infer a parameter's type and defaults it to text, which
+	// then fails against a timestamptz column.
 	err = tx.QueryRow(ctx, `
 		UPDATE orders SET
 			status = $2::order_status,
 			amount_paid_kobo = $3,
 			payment_method = $4,
-			paid_at = CASE WHEN $2 = 'paid' THEN $5 ELSE NULL END,
+			paid_at = CASE WHEN $2::order_status = 'paid' THEN $5::timestamptz ELSE NULL END,
 			transaction_ref = COALESCE(transaction_ref, $6)
 		WHERE reference = $1 AND status = 'pending'
 		RETURNING id, reference, COALESCE(transaction_ref,''), customer_name, customer_email,

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "konfirm-backend",
+      "runtimeExecutable": "/Users/admin/.local/go/bin/go",
+      "runtimeArgs": ["run", "./cmd/server"],
+      "cwd": "/Users/admin/Kon-firm/backend",
+      "port": 8080
+    }
+  ]
+}
