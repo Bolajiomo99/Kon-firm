@@ -37,6 +37,13 @@ func run(log *slog.Logger) error {
 	}
 	log.Info("configuration loaded", "config", cfg.Redacted())
 
+	// A bad redirect URL is invisible from the server: Monnify takes the
+	// money, the customer lands nowhere, and nothing errors. Say so at boot,
+	// where someone might read it, rather than letting a shopper find out.
+	if problem := cfg.CheckRedirectURL(); problem != "" {
+		log.Error("REDIRECT URL PROBLEM — customers will be stranded after paying", "problem", problem)
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

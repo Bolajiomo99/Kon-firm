@@ -174,7 +174,21 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "database unreachable")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+
+	// The redirect URL is reported here on purpose. It is public — a customer's
+	// browser follows it — and a wrong one is otherwise undiagnosable from
+	// outside: the payment succeeds and the shopper simply never comes back.
+	body := map[string]any{
+		"status":      "ok",
+		"env":         s.cfg.Env,
+		"monnifyBase": s.cfg.MonnifyBaseURL,
+		"redirectUrl": s.cfg.RedirectURL,
+	}
+	if problem := s.cfg.CheckRedirectURL(); problem != "" {
+		body["status"] = "degraded"
+		body["redirectProblem"] = problem
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 func (s *Server) handleListProducts(w http.ResponseWriter, r *http.Request) {

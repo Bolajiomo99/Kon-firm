@@ -144,10 +144,47 @@ func Load() (*Config, error) {
 }
 
 // Redacted returns a loggable summary. It never includes secret material.
+//
+// redirect_url is included deliberately: it is not a secret, it is where
+// Monnify sends the customer back to, and a wrong one strands them on the
+// payment page with no way home — a failure that is invisible from the
+// server and looks like the shop is broken.
 func (c *Config) Redacted() string {
-	return fmt.Sprintf("env=%s port=%s monnify_base=%s api_key=%s contract=%s db=%s",
+	return fmt.Sprintf("env=%s port=%s monnify_base=%s api_key=%s contract=%s redirect_url=%s db=%s",
 		c.Env, c.Port, c.MonnifyBaseURL,
-		mask(c.MonnifyAPIKey), mask(c.MonnifyContractCode), maskURL(c.DatabaseURL))
+		mask(c.MonnifyAPIKey), mask(c.MonnifyContractCode), c.RedirectURL, maskURL(c.DatabaseURL))
+}
+
+// CheckRedirectURL reports why the configured redirect would strand a
+// customer, or "" if it looks usable.
+//
+// This is checked at boot rather than discovered by a shopper. The failure is
+// completely silent server-side: we hand Monnify a URL, Monnify takes the
+// money, and the customer sits on a success page that goes nowhere. Nothing
+// errors. Nothing logs. The only symptom is a person who paid and cannot get
+// back to their receipt.
+func (c *Config) CheckRedirectURL() string {
+	u := strings.TrimSpace(c.RedirectURL)
+	switch {
+	case u == "":
+		return "KONFIRM_REDIRECT_URL is empty — customers will have no way back from Monnify"
+	case strings.Contains(u, "placeholder") || strings.Contains(u, ".invalid") || strings.Contains(u, "example.com"):
+		return "KONFIRM_REDIRECT_URL is still a placeholder (" + u + ") — customers will be stranded on Monnify's page"
+	case !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://"):
+		return "KONFIRM_REDIRECT_URL must be an absolute http(s) URL, got: " + u
+	}
+	if c.Env == "production" {
+		if strings.Contains(u, "localhost") || strings.Contains(u, "127.0.0.1") {
+			return "KONFIRM_REDIRECT_URL points at localhost (" + u + ") in production — a customer's browser cannot reach your laptop"
+		}
+		if !strings.HasPrefix(u, "https://") {
+			return "KONFIRM_REDIRECT_URL should be https in production, got: " + u
+		}
+	}
+	if !strings.HasSuffix(strings.TrimRight(u, "/"), "/payment/callback") {
+		return "KONFIRM_REDIRECT_URL does not end in /payment/callback (" + u + ") — that is the only page that renders a receipt"
+	}
+	return ""
 }
 
 func mask(s string) string {
