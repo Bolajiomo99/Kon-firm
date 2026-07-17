@@ -8,6 +8,13 @@ import { connectLive, liveIndicator } from './live.js';
 
 const $ = (id) => document.getElementById(id);
 
+// How often to re-read as a backstop. Rare while the stream is healthy, brisk
+// when it is not — a dashboard nobody can trust is worse than a few extra
+// queries.
+const SLOW_POLL_MS = 20000;
+const FAST_POLL_MS = 5000;
+let streamUp = false;
+
 function stat(label, value, sub) {
   const d = document.createElement('div');
   d.className = 'stat';
@@ -226,7 +233,35 @@ async function boot() {
       if (ev.type === 'order.paid') toast('Payment confirmed — a new order just settled');
       if (ev.type === 'refund.completed') toast('A refund completed');
     },
-    onStatus: (connected) => liveIndicator($('live-status'), connected),
+    onStatus: (connected) => {
+      streamUp = connected;
+      liveIndicator($('live-status'), connected);
+    },
+  });
+
+  // Backstop.
+  //
+  // The stream is the fast path, not the only path. A dropped connection, a
+  // sleeping instance, or a proxy that quietly closed an idle socket would
+  // otherwise leave this dashboard showing "pending" against an order the
+  // database already settled — and the only way to find out would be to hit
+  // refresh, which is exactly what live updates were meant to remove.
+  //
+  // This is the same lesson as the webhook: never let one delivery mechanism
+  // be the only way a screen learns the truth.
+  // A self-scheduling timeout, not setInterval: the interval has to change
+  // when the stream drops, and setInterval fixes its delay at creation time —
+  // when streamUp is still false — so it would never adapt.
+  const tick = () => {
+    if (!document.hidden) load();
+    setTimeout(tick, streamUp ? SLOW_POLL_MS : FAST_POLL_MS);
+  };
+  setTimeout(tick, streamUp ? SLOW_POLL_MS : FAST_POLL_MS);
+
+  // Coming back to a tab should show the truth immediately, not on the next
+  // tick — this is the moment a stale number is most likely to be believed.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) load();
   });
 }
 

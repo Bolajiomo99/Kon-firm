@@ -165,6 +165,7 @@ async function boot() {
         }
       },
     });
+    // The polling below is the backstop if this stream never delivers.
   }
 
   poll();
