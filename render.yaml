@@ -35,5 +35,20 @@ services:
       - key: DATABASE_URL
         sync: false
 
+      # Bootstrap admin. Someone must be able to sign in before anyone can be
+      # granted a role, so the first admin comes from configuration.
+      #
+      # The password is re-hashed from this value on every boot, so rotating it
+      # is a matter of changing it here and redeploying.
+      - key: KONFIRM_ADMIN_PHONE
+        sync: false
+      - key: KONFIRM_ADMIN_PASSWORD
+        sync: false
+      - key: KONFIRM_ADMIN_NAME
+        value: Store Manager
+
+      # ENV=production turns on Secure cookies and the __Host- prefix. Setting
+      # this to anything else on a public deployment sends session cookies
+      # without the Secure flag.
       - key: ENV
         value: production
