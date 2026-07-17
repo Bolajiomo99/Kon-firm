@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 	konfirm "github.com/Bolajiomo99/Kon-firm"
 	"github.com/Bolajiomo99/Kon-firm/internal/api"
+	"github.com/Bolajiomo99/Kon-firm/internal/auth"
 	"github.com/Bolajiomo99/Kon-firm/internal/config"
 	"github.com/Bolajiomo99/Kon-firm/internal/monnify"
 	"github.com/Bolajiomo99/Kon-firm/internal/store"
@@ -50,6 +52,38 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	log.Info("migrations applied")
+
+	// Seed the bootstrap admin. Someone has to be able to sign in before
+	// anyone can be granted a role, so the first admin comes from config.
+	if cfg.AdminPhone != "" && cfg.AdminPassword != "" {
+		phone, err := auth.NormalizePhone(cfg.AdminPhone)
+		if err != nil {
+			return fmt.Errorf("KONFIRM_ADMIN_PHONE is not a valid Nigerian number: %w", err)
+		}
+		if err := auth.ValidatePassword(cfg.AdminPassword); err != nil {
+			return fmt.Errorf("KONFIRM_ADMIN_PASSWORD rejected: %w", err)
+		}
+		hash, err := auth.HashPassword(cfg.AdminPassword)
+		if err != nil {
+			return err
+		}
+		if err := st.EnsureAdmin(ctx, phone, cfg.AdminName, hash); err != nil {
+			return err
+		}
+		log.Info("admin account ready", "phone", auth.FormatPhoneForDisplay(phone))
+	} else {
+		// Loud, because an unreachable admin dashboard is a support call, and
+		// a silently-absent one is worse than a missing feature.
+		log.Warn("no admin configured — set KONFIRM_ADMIN_PHONE and KONFIRM_ADMIN_PASSWORD to enable the dashboard")
+	}
+
+	// Expired sessions are dead weight; clear them at boot rather than
+	// carrying a table that only ever grows.
+	if n, err := st.PurgeExpiredSessions(ctx); err != nil {
+		log.Warn("could not purge expired sessions", "err", err)
+	} else if n > 0 {
+		log.Info("purged expired sessions", "count", n)
+	}
 
 	mc, err := monnify.NewClient(monnify.Config{
 		APIKey:       cfg.MonnifyAPIKey,

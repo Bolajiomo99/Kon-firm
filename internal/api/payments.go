@@ -178,6 +178,9 @@ func (s *Server) handleMonnifyWebhook(w http.ResponseWriter, r *http.Request) {
 	switch event.EventType {
 	case monnify.EventSuccessfulTransaction, monnify.EventFailedTransaction:
 		// handled below
+	case monnify.EventSuccessfulRefund, monnify.EventFailedRefund:
+		s.applyRefundEvent(w, r, event, rawBody)
+		return
 	default:
 		// Acknowledge events we do not act on, so Monnify stops retrying them.
 		s.log.Info("ignoring webhook event", "type", event.EventType)

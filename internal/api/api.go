@@ -49,18 +49,34 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 func (s *Server) Routes(frontend fs.FS) http.Handler {
 	mux := http.NewServeMux()
 
+	// Public.
 	mux.HandleFunc("GET /api/health", s.handleHealth)
 	mux.HandleFunc("GET /api/products", s.handleListProducts)
-	mux.HandleFunc("GET /api/products/barcode/{barcode}", s.handleProductByBarcode)
 	mux.HandleFunc("POST /api/checkout", s.handleCheckout)
 	mux.HandleFunc("GET /api/orders/{reference}", s.handleGetOrder)
+
+	// Accounts.
+	mux.HandleFunc("POST /api/auth/signup", s.handleSignup)
+	mux.HandleFunc("POST /api/auth/login", s.handleLogin)
+	mux.HandleFunc("POST /api/auth/logout", s.handleLogout)
+	mux.HandleFunc("GET /api/auth/me", s.handleMe)
+	mux.HandleFunc("GET /api/me/orders", s.requireUser(s.handleMyOrders))
+
+	// Monnify calls this. It authenticates by signature, not by session.
 	mux.HandleFunc("POST /api/webhooks/monnify", s.handleMonnifyWebhook)
-	mux.HandleFunc("GET /api/admin/overview", s.handleAdminOverview)
+
+	// Staff only. The POS is a shop-counter tool: barcode lookup exposes the
+	// catalogue keyed by barcode, and taking payment is not a public action.
+	mux.HandleFunc("GET /api/products/barcode/{barcode}", s.requireAdmin(s.handleProductByBarcode))
+	mux.HandleFunc("GET /api/admin/overview", s.requireAdmin(s.handleAdminOverview))
+	mux.HandleFunc("POST /api/admin/orders/{reference}/refund", s.requireAdmin(s.handleRefund))
 
 	// Everything not under /api is the frontend.
 	mux.Handle("/", newStaticHandler(frontend))
 
-	return s.withSecurityHeaders(s.withLogging(mux))
+	// Order matters: withUser must run before any handler that reads the
+	// session, and the security headers wrap the lot.
+	return s.withSecurityHeaders(s.withLogging(s.withUser(mux)))
 }
 
 // withSecurityHeaders applies a conservative baseline to every response.

@@ -21,6 +21,12 @@ type Config struct {
 	DatabaseURL         string
 	Port                string
 	Env                 string
+
+	// Bootstrap admin. An admin must exist before anyone can sign in to
+	// create one, so the first account comes from configuration.
+	AdminPhone    string
+	AdminName     string
+	AdminPassword string
 }
 
 // LoadDotEnv reads key=value pairs from path into the process environment.
@@ -97,6 +103,13 @@ func Load() (*Config, error) {
 		DatabaseURL:         os.Getenv("DATABASE_URL"),
 		Port:                os.Getenv("PORT"),
 		Env:                 os.Getenv("ENV"),
+		AdminPhone:          os.Getenv("KONFIRM_ADMIN_PHONE"),
+		AdminName:           os.Getenv("KONFIRM_ADMIN_NAME"),
+		AdminPassword:       os.Getenv("KONFIRM_ADMIN_PASSWORD"),
+	}
+
+	if c.AdminName == "" {
+		c.AdminName = "Store Manager"
 	}
 
 	if c.Port == "" {
