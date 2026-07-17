@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -191,8 +192,8 @@ func (s *Server) handleMonnifyWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	paidKobo := nairaToKobo(data.AmountPaid)
-	payableKobo := nairaToKobo(data.TotalPayable)
+	paidKobo := data.AmountPaid.Kobo()
+	payableKobo := data.TotalPayable.Kobo()
 
 	// An order settles only if Monnify says PAID *and* the money actually
 	// covers the bill. Trusting paymentStatus alone would let a short transfer
@@ -269,7 +270,78 @@ func (s *Server) handleGetOrder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not load order")
 		return
 	}
+
+	// If the order is still pending, ask Monnify directly rather than waiting
+	// on a webhook that may never arrive. Monnify's own guidance is to verify
+	// server-side before giving value; a webhook is a fast path, not a
+	// guarantee. This is what stops a dropped notification from stranding a
+	// customer who has genuinely paid.
+	if order.Status == "pending" && order.TransactionRef != "" {
+		if settled := s.reconcile(r.Context(), order); settled != nil {
+			order = settled
+		}
+	}
+
 	writeJSON(w, http.StatusOK, order)
+}
+
+// reconcile asks Monnify about a pending order and settles it if it was paid.
+// Returns nil when nothing changed, so the caller keeps what it already had.
+//
+// Reconciliation goes through the same ApplyWebhook path as a notification,
+// so the same UNIQUE constraint applies: if a webhook lands at the same
+// moment, exactly one of them credits the order.
+func (s *Server) reconcile(ctx context.Context, order *store.Order) *store.Order {
+	tx, err := s.monnify.VerifyByTransactionReference(ctx, order.TransactionRef)
+	if err != nil {
+		if !monnify.IsNotFound(err) {
+			s.log.Warn("reconcile failed", "ref", order.Reference, "err", err)
+		}
+		return nil
+	}
+
+	if !tx.Paid() {
+		return nil // genuinely not paid yet; leave it pending
+	}
+
+	paidKobo := tx.AmountPaid.Kobo()
+	if paidKobo < order.TotalKobo {
+		s.log.Warn("reconcile: underpayment refused",
+			"ref", order.Reference, "paid_kobo", paidKobo, "owed_kobo", order.TotalKobo)
+		return nil
+	}
+
+	// Distinct event type from a webhook's, so reconciliation and a late
+	// notification each get their own ledger row while the order itself is
+	// still only ever credited once.
+	raw, _ := json.Marshal(tx)
+	settled, err := s.store.ApplyWebhook(ctx, store.PaymentResult{
+		TransactionRef: tx.TransactionReference,
+		PaymentRef:     order.Reference,
+		EventType:      "RECONCILED_VERIFICATION",
+		AmountPaidKobo: paidKobo,
+		PaymentMethod:  tx.PaymentMethod,
+		PaidAt:         tx.CompletedOn.Time,
+		Success:        true,
+		RawPayload:     raw,
+	})
+
+	switch {
+	case errors.Is(err, store.ErrAlreadyProcessed), errors.Is(err, store.ErrNotFound):
+		// A webhook beat us to it. Re-read rather than reporting stale state.
+		fresh, err := s.store.OrderByReference(ctx, order.Reference)
+		if err != nil {
+			return nil
+		}
+		return fresh
+	case err != nil:
+		s.log.Error("reconcile: settle failed", "ref", order.Reference, "err", err)
+		return nil
+	}
+
+	s.log.Info("order settled by reconciliation — no usable webhook arrived",
+		"ref", settled.Reference, "amount_kobo", paidKobo)
+	return settled
 }
 
 func (s *Server) handleProductByBarcode(w http.ResponseWriter, r *http.Request) {

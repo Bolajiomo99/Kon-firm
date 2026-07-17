@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -123,24 +124,72 @@ func (t *Time) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Amount tolerates money arriving as either a JSON number or a JSON string.
+//
+// Monnify is not consistent about this: the webhook docs show `"amountPaid":
+// 78000` while the transaction-status API returns amounts quoted. Committing
+// to float64 makes the other shape a hard decode failure, which takes the
+// whole payload down and reads as a bare 400 — an expensive way to learn that
+// a field gained quotes.
+//
+// Being liberal in what we accept costs nothing here: the value is converted
+// to integer kobo before any arithmetic touches it.
+type Amount float64
+
+func (a *Amount) UnmarshalJSON(b []byte) error {
+	s := strings.TrimSpace(string(b))
+	if s == "null" || s == `""` || s == "" {
+		return nil
+	}
+	s = strings.Trim(s, `"`)           // number-as-string
+	s = strings.ReplaceAll(s, ",", "") // defensive: "45,000.00"
+	if s == "" {
+		return nil
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return fmt.Errorf("monnify: cannot read amount %q: %w", s, err)
+	}
+	*a = Amount(f)
+	return nil
+}
+
+func (a Amount) Float64() float64 { return float64(a) }
+
+// Kobo converts to integer minor units, rounding to nearest. Truncation would
+// silently lose a kobo, since float64 can hold 45000.00 as 44999.999...
+func (a Amount) Kobo() int64 {
+	if a < 0 {
+		return 0
+	}
+	return int64(float64(a)*100 + 0.5)
+}
+
+// Customer tolerates the customer object being absent or null.
+type Customer struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
 // TransactionEventData is the payload for transaction events.
+//
+// Every field is optional as far as decoding is concerned. Monnify sends
+// different shapes for card, transfer, and offline payments, and a field we
+// do not need must never be able to fail a payment we do.
 type TransactionEventData struct {
-	TransactionReference string  `json:"transactionReference"`
-	PaymentReference     string  `json:"paymentReference"`
-	PaidOn               Time    `json:"paidOn"`
-	PaymentStatus        string  `json:"paymentStatus"`
-	PaymentDescription   string  `json:"paymentDescription"`
-	AmountPaid           float64 `json:"amountPaid"`
-	TotalPayable         float64 `json:"totalPayable"`
+	TransactionReference string `json:"transactionReference"`
+	PaymentReference     string `json:"paymentReference"`
+	PaidOn               Time   `json:"paidOn"`
+	PaymentStatus        string `json:"paymentStatus"`
+	PaymentDescription   string `json:"paymentDescription"`
+	AmountPaid           Amount `json:"amountPaid"`
+	TotalPayable         Amount `json:"totalPayable"`
 	// SettlementAmount is what Monnify will actually settle to the merchant,
 	// i.e. AmountPaid minus Monnify's fee.
-	SettlementAmount float64 `json:"settlementAmount"`
-	Currency         string  `json:"currency"`
-	PaymentMethod    string  `json:"paymentMethod"`
-	Customer         struct {
-		Name  string `json:"name"`
-		Email string `json:"email"`
-	} `json:"customer"`
+	SettlementAmount Amount   `json:"settlementAmount"`
+	Currency         string   `json:"currency"`
+	PaymentMethod    string   `json:"paymentMethod"`
+	Customer         Customer `json:"customer"`
 }
 
 // PaidOnOr returns the parsed payment time, or fallback when Monnify sent a
