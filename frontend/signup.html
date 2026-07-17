@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create account — Kon-firm</title>
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true">K</span>
+      <span class="brand-text">Kon-firm</span>
+    </a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/">Store</a>
+      <a href="/login">Sign in</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="wrap" style="max-width:440px;padding:56px 20px">
+  <h1 style="font-size:1.9rem">Create your account</h1>
+  <p style="color:var(--text-muted)">
+    Your WhatsApp number is your sign-in — that’s it. Order updates reach you where you already are.
+  </p>
+
+  <div class="error-box" id="error" hidden role="alert"></div>
+
+  <form id="form" novalidate style="margin-top:20px">
+    <div class="field">
+      <label for="name">Full name</label>
+      <input id="name" name="name" autocomplete="name" placeholder="Ada Lovelace" required autofocus>
+    </div>
+    <div class="field">
+      <label for="phone">WhatsApp number</label>
+      <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel"
+             placeholder="0803 123 4567" required>
+    </div>
+    <div class="field">
+      <label for="email">Email <span style="font-weight:400;color:var(--text-muted)">(for receipts)</span></label>
+      <input id="email" name="email" type="email" autocomplete="email" placeholder="ada@example.com">
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="new-password" required>
+      <p style="font-size:.76rem;color:var(--text-muted);margin:5px 0 0">
+        At least 8 characters, with letters and numbers.
+      </p>
+    </div>
+    <button class="btn btn-block btn-lg" id="submit" type="submit">Create account</button>
+  </form>
+
+  <p style="margin-top:20px;text-align:center;font-size:.9rem;color:var(--text-muted)">
+    Already registered? <a href="/login">Sign in</a>
+  </p>
+
+  <p style="margin-top:24px;font-size:.76rem;color:var(--text-muted);border-top:1px solid var(--border);padding-top:16px">
+    You can also check out as a guest — an account just saves your order history.
+  </p>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-bottom">
+    <span>© 2026 Kon-firm</span>
+    <span>Secured by Monnify</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/signup.js" type="module"></script>
+</body>
+</html>

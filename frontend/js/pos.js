@@ -6,6 +6,7 @@
 // always available and is not a second-class path: a real counter needs a way
 // to key in a code when a label is scuffed.
 import { Cart, formatKobo, toast, apiFetch } from './cart.js';
+import { currentUser, renderNav } from './auth.js';
 
 const cart = new Cart('konfirm.pos.v1');
 const $ = (id) => document.getElementById(id);
@@ -293,9 +294,22 @@ function hideError(node) {
   node.hidden = true;
 }
 
-el.start.addEventListener('click', startScanner);
-el.stop.addEventListener('click', stopScanner);
-cart.onChange(renderSale);
+// The counter is staff-only: it looks up the catalogue by barcode and takes
+// payment. Neither is a public action.
+async function boot() {
+  const user = await currentUser();
+  renderNav(user, document.getElementById('account-nav'));
+  if (!user || user.role !== 'admin') {
+    window.location.href = '/login?next=/pos';
+    return;
+  }
 
-renderSale();
-loadDemoCodes();
+  el.start.addEventListener('click', startScanner);
+  el.stop.addEventListener('click', stopScanner);
+  cart.onChange(renderSale);
+
+  renderSale();
+  loadDemoCodes();
+}
+
+boot();

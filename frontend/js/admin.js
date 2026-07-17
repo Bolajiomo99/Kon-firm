@@ -1,5 +1,6 @@
 // Admin dashboard: revenue, orders across both channels, and live inventory.
-import { formatKobo, apiFetch } from './cart.js';
+import { formatKobo, apiFetch, toast } from './cart.js';
+import { currentUser, renderNav } from './auth.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -49,7 +50,7 @@ function renderOrders(orders) {
   if (!orders.length) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.colSpan = 6;
+    td.colSpan = 7;
     td.className = 'empty';
     td.textContent = 'No orders yet. Place one from the store or the counter.';
     tr.append(td);
@@ -82,7 +83,17 @@ function renderOrders(orders) {
     const when = document.createElement('td');
     when.textContent = new Date(o.createdAt).toLocaleString();
 
-    tr.append(ref, cust, chan, status, total, when);
+    const act = document.createElement('td');
+    if (o.status === 'paid') {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-sm btn-secondary';
+      btn.type = 'button';
+      btn.textContent = 'Refund';
+      btn.addEventListener('click', () => refundOrder(o.reference, o.totalKobo));
+      act.append(btn);
+    }
+
+    tr.append(ref, cust, chan, status, total, when, act);
     body.append(tr);
   }
 }
@@ -137,6 +148,36 @@ function renderInventory(products) {
   }
 }
 
+// Refunding is money leaving the business, so it asks first. A single
+// mis-click on a table row must not be able to return someone's payment.
+async function refundOrder(reference, totalKobo) {
+  const reason = window.prompt(
+    `Refund ${formatKobo(totalKobo)} for ${reference}?\n\nEnter a reason (required):`
+  );
+  if (reason === null) return;
+  if (!reason.trim()) {
+    toast('A refund reason is required');
+    return;
+  }
+
+  try {
+    const res = await apiFetch(`/api/admin/orders/${encodeURIComponent(reference)}/refund`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason.trim() }),
+    });
+    const status = res.refund.status;
+    toast(
+      status === 'completed'
+        ? 'Refund completed — customer credited'
+        : `Refund ${status} with Monnify (${res.monnifyStatus})`
+    );
+    load();
+  } catch (err) {
+    toast(`Refund failed: ${err.message}`);
+  }
+}
+
 async function load() {
   $('error').hidden = true;
   try {
@@ -148,6 +189,7 @@ async function load() {
     renderStats(overview.summary);
     renderOrders(overview.recent);
     renderInventory(products);
+    if (overview.refunds) renderRefunds(overview.refunds);
   } catch (err) {
     $('error').textContent = `Could not load the dashboard: ${err.message}`;
     $('error').hidden = false;
@@ -155,5 +197,65 @@ async function load() {
   }
 }
 
-$('refresh').addEventListener('click', load);
-load();
+function renderRefunds(refunds) {
+  const body = $('refunds');
+  if (!body) return;
+  body.innerHTML = '';
+
+  if (!refunds.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 5;
+    td.className = 'empty';
+    td.textContent = 'No refunds issued.';
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const rf of refunds) {
+    const tr = document.createElement('tr');
+
+    const ref = document.createElement('td');
+    const c = document.createElement('code');
+    c.className = 'ref';
+    c.textContent = rf.orderReference || rf.reference;
+    ref.append(c);
+
+    const amt = document.createElement('td');
+    amt.className = 'num';
+    amt.textContent = formatKobo(rf.amountKobo);
+
+    const st = document.createElement('td');
+    const b = document.createElement('span');
+    b.className = `badge badge-${rf.status === 'completed' ? 'paid' : rf.status === 'failed' ? 'failed' : 'pending'}`;
+    b.textContent = rf.status;
+    st.append(b);
+
+    const reason = document.createElement('td');
+    reason.textContent = rf.reason;
+    reason.style.whiteSpace = 'normal';
+
+    const when = document.createElement('td');
+    when.textContent = new Date(rf.createdAt).toLocaleString();
+
+    tr.append(ref, amt, st, reason, when);
+    body.append(tr);
+  }
+}
+
+// Gate the page itself. The API already refuses non-admins, but rendering an
+// admin shell to a stranger before the fetch fails looks like a hole even
+// when it is not.
+async function boot() {
+  const user = await currentUser();
+  renderNav(user, document.getElementById('account-nav'));
+  if (!user || user.role !== 'admin') {
+    window.location.href = '/login?next=/admin';
+    return;
+  }
+  $('refresh').addEventListener('click', load);
+  load();
+}
+
+boot();

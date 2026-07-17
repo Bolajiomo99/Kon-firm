@@ -19,8 +19,7 @@
     </a>
     <nav class="nav-links" aria-label="Main">
       <a href="/" aria-current="page">Store</a>
-      <a href="/pos">POS</a>
-      <a href="/admin">Admin</a>
+      <span id="account-nav" style="display:flex;gap:4px;align-items:center"></span>
       <button class="btn btn-sm cart-btn" id="cart-open" aria-haspopup="dialog">
         Cart
         <span class="cart-count" id="cart-count" hidden>0</span>
@@ -44,7 +43,7 @@
         </p>
         <div class="hero-cta">
           <a class="btn btn-lg" href="#catalogue">Browse the store</a>
-          <a class="btn btn-lg btn-secondary" href="/pos">Open the counter</a>
+          <a class="btn btn-lg btn-secondary" href="/signup">Create an account</a>
         </div>
       </div>
 
@@ -81,9 +80,6 @@
     <div class="wrap partner-inner">
       <span>Payments partnered with</span>
       <strong class="monnify-word">Monnify</strong>
-      <span style="text-transform:none;letter-spacing:0;font-weight:500">
-        · Built for the API Conference Lagos 2026 Developer Challenge
-      </span>
     </div>
   </div>
 
@@ -153,8 +149,8 @@
         <h4>Product</h4>
         <ul>
           <li><a href="/">Store</a></li>
-          <li><a href="/pos">Point of sale</a></li>
-          <li><a href="/admin">Admin dashboard</a></li>
+          <li><a href="/orders">My orders</a></li>
+          <li><a href="/login">Sign in</a></li>
         </ul>
       </div>
       <div>
@@ -162,7 +158,6 @@
         <ul>
           <li><a href="https://github.com/Bolajiomo99/Kon-firm">Source code</a></li>
           <li><a href="https://developers.monnify.com/">Monnify docs</a></li>
-          <li><a href="https://apiconf.net/hackathon">API Conf Lagos 2026</a></li>
         </ul>
       </div>
     </div>

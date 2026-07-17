@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — Kon-firm</title>
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true">K</span>
+      <span class="brand-text">Kon-firm</span>
+    </a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/">Store</a>
+      <a href="/signup">Create account</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="wrap" style="max-width:440px;padding:56px 20px">
+  <h1 style="font-size:1.9rem">Welcome back</h1>
+  <p style="color:var(--text-muted)">Sign in with the WhatsApp number you registered.</p>
+
+  <div class="error-box" id="error" hidden role="alert"></div>
+
+  <form id="form" novalidate style="margin-top:20px">
+    <div class="field">
+      <label for="phone">WhatsApp number</label>
+      <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel"
+             placeholder="0803 123 4567" required autofocus>
+      <p style="font-size:.76rem;color:var(--text-muted);margin:5px 0 0">
+        Any format works — 0803…, +234803…, or 803…
+      </p>
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn btn-block btn-lg" id="submit" type="submit">Sign in</button>
+  </form>
+
+  <p style="margin-top:20px;text-align:center;font-size:.9rem;color:var(--text-muted)">
+    No account yet? <a href="/signup">Create one</a>
+  </p>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-bottom">
+    <span>© 2026 Kon-firm</span>
+    <span>Secured by Monnify</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/login.js" type="module"></script>
+</body>
+</html>

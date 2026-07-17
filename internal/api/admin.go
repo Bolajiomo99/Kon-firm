@@ -3,6 +3,8 @@ package api
 import (
 	"net/http"
 	"time"
+
+	"github.com/Bolajiomo99/Kon-firm/internal/store"
 )
 
 // SalesSummary is the admin dashboard's headline figures.
@@ -30,8 +32,9 @@ type recentOrder struct {
 }
 
 type adminOverview struct {
-	Summary SalesSummary  `json:"summary"`
-	Recent  []recentOrder `json:"recent"`
+	Summary SalesSummary   `json:"summary"`
+	Recent  []recentOrder  `json:"recent"`
+	Refunds []store.Refund `json:"refunds"`
 }
 
 // handleAdminOverview reports sales figures.
@@ -94,5 +97,12 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, adminOverview{Summary: sum, Recent: recent})
+	refunds, err := s.store.RecentRefunds(ctx, 20)
+	if err != nil {
+		s.log.Error("recent refunds", "err", err)
+		writeError(w, http.StatusInternalServerError, "could not load refunds")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, adminOverview{Summary: sum, Recent: recent, Refunds: refunds})
 }

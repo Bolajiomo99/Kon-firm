@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Bolajiomo99/Kon-firm/internal/auth"
 	"github.com/Bolajiomo99/Kon-firm/internal/monnify"
 	"github.com/Bolajiomo99/Kon-firm/internal/store"
 )
@@ -95,6 +96,20 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A signed-in shopper gets the order filed against their account; a guest
+	// still gets to buy. The identity comes from the session, never from the
+	// request body — a client-supplied user id would let anyone file an order
+	// into someone else's history.
+	buyer := userFrom(r.Context())
+	if buyer != nil && buyer.Role == auth.RoleCustomer {
+		if req.CustomerName == "" {
+			req.CustomerName = buyer.Name
+		}
+		if req.CustomerEmail == "" {
+			req.CustomerEmail = buyer.Email
+		}
+	}
+
 	// Price the cart server-side. This is also where stock is validated.
 	order, err := s.store.CreateOrder(r.Context(), ref, req.CustomerName, req.CustomerEmail, req.Channel, lines)
 	if err != nil {
@@ -132,6 +147,15 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		s.log.Error("attach checkout", "err", err, "ref", order.Reference)
 		writeError(w, http.StatusInternalServerError, "could not save checkout details")
 		return
+	}
+
+	// File the order against the buyer's account, if there is one. Best-effort
+	// on purpose: an order that is paid for but missing from a history page is
+	// a nuisance, whereas failing the checkout over it would cost a sale.
+	if buyer != nil && buyer.Role == auth.RoleCustomer {
+		if err := s.store.AttachOrderToUser(r.Context(), order.Reference, buyer.ID); err != nil {
+			s.log.Error("attach order to user", "err", err, "ref", order.Reference, "user_id", buyer.ID)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, checkoutResponse{

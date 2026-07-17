@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My orders — Kon-firm</title>
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true">K</span>
+      <span class="brand-text">Kon-firm</span>
+    </a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/">Store</a>
+      <span id="account-nav" style="display:flex;gap:4px;align-items:center"></span>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="wrap" style="padding:40px 20px;max-width:900px">
+  <h1 style="font-size:1.9rem">My orders</h1>
+  <p style="color:var(--text-muted)">Every order placed with this account.</p>
+
+  <div class="error-box" id="error" hidden role="alert"></div>
+
+  <div class="table-wrap" style="margin-top:20px">
+    <table>
+      <caption class="sr-only">Your orders</caption>
+      <thead>
+        <tr>
+          <th scope="col">Reference</th>
+          <th scope="col">Status</th>
+          <th scope="col" style="text-align:right">Total</th>
+          <th scope="col">Placed</th>
+          <th scope="col"></th>
+        </tr>
+      </thead>
+      <tbody id="orders">
+        <tr><td colspan="5" class="empty">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-bottom">
+    <span>© 2026 Kon-firm</span>
+    <span>Secured by Monnify</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/orders.js" type="module"></script>
+</body>
+</html>

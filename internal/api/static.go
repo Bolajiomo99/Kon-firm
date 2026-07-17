@@ -28,6 +28,9 @@ var pages = map[string]string{
 	"/index.html":       "index.html",
 	"/pos":              "pos.html",
 	"/admin":            "admin.html",
+	"/login":            "login.html",
+	"/signup":           "signup.html",
+	"/orders":           "orders.html",
 	"/payment/callback": "callback.html",
 }
 
