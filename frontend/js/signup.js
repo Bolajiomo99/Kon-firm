@@ -1,4 +1,5 @@
 import { apiFetch, toast } from './cart.js';
+import { renderThemeToggle } from './theme.js';
 import { mountFooter } from './footer.js';
 
 const form = document.getElementById('form');
@@ -41,3 +42,4 @@ form.addEventListener('submit', async (e) => {
 });
 
 mountFooter();
+renderThemeToggle(document.getElementById('theme-toggle'));

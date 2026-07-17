@@ -20,6 +20,7 @@
     </a>
     <nav class="nav-links" aria-label="Main">
       <a href="/">Store</a>
+      <span id="theme-toggle"></span>
       <span id="account-nav" style="display:flex;gap:4px;align-items:center"></span>
     </nav>
   </div>
@@ -94,21 +95,29 @@
   </section>
 
   <section class="section" aria-labelledby="inv-title" style="padding-top:0">
-    <h2 id="inv-title">Inventory</h2>
-    <div class="table-wrap" style="margin-top:14px">
+    <div class="section-head">
+      <div>
+        <h2 id="inv-title">Products</h2>
+        <p>Add, edit, reprice or hide anything in the shop.</p>
+      </div>
+      <button class="btn" id="add-product" type="button">+ Add product</button>
+    </div>
+    <div class="table-wrap">
       <table>
-        <caption class="sr-only">Current inventory</caption>
+        <caption class="sr-only">Products</caption>
         <thead>
           <tr>
-            <th scope="col">SKU</th>
+            <th scope="col"><span class="sr-only">Image</span></th>
             <th scope="col">Product</th>
-            <th scope="col">Barcode</th>
+            <th scope="col">Category</th>
             <th scope="col" style="text-align:right">Price</th>
             <th scope="col" style="text-align:right">Stock</th>
+            <th scope="col">Flags</th>
+            <th scope="col"><span class="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody id="inventory">
-          <tr><td colspan="5" class="empty">Loading inventory…</td></tr>
+          <tr><td colspan="7" class="empty">Loading products…</td></tr>
         </tbody>
       </table>
     </div>
@@ -116,6 +125,88 @@
 </main>
 
 <footer class="site-footer"></footer>
+
+<!-- Product editor -->
+<div class="modal" id="product-modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pf-title">
+    <div class="modal-head">
+      <h2 id="pf-title">Add a product</h2>
+      <button class="btn btn-sm btn-secondary" id="pf-cancel" type="button">Cancel</button>
+    </div>
+    <form id="product-form" class="modal-body" novalidate>
+      <div class="error-box" id="pf-error" hidden role="alert"></div>
+
+      <div class="pf-grid">
+        <div>
+          <div class="field">
+            <label for="pf-name">Name</label>
+            <input id="pf-name" required placeholder="Oxford Cotton Shirt">
+          </div>
+          <div class="two-up">
+            <div class="field">
+              <label for="pf-sku">SKU</label>
+              <input id="pf-sku" required placeholder="KF-FSH-120" style="text-transform:uppercase">
+            </div>
+            <div class="field">
+              <label for="pf-category">Category</label>
+              <select id="pf-category">
+                <option>Fashion</option>
+                <option>Gadgets</option>
+                <option>Accessories</option>
+                <option>Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="pf-desc">Description</label>
+            <textarea id="pf-desc" rows="4" placeholder="What it is, what it is made of, why it is worth the money."></textarea>
+          </div>
+          <div class="two-up">
+            <div class="field">
+              <label for="pf-price">Price (₦)</label>
+              <input id="pf-price" inputmode="decimal" required placeholder="24500.00">
+              <p class="hint">Includes VAT at 7.5%.</p>
+            </div>
+            <div class="field">
+              <label for="pf-compare">Was (₦)</label>
+              <input id="pf-compare" inputmode="decimal" placeholder="Optional">
+              <p class="hint">Must exceed the price.</p>
+            </div>
+          </div>
+          <div class="two-up">
+            <div class="field">
+              <label for="pf-stock">Stock</label>
+              <input id="pf-stock" type="number" min="0" value="0">
+            </div>
+            <div class="field">
+              <label for="pf-barcode">Barcode</label>
+              <input id="pf-barcode" inputmode="numeric" placeholder="For the POS scanner">
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="field">
+            <label for="pf-image">Image URL</label>
+            <input id="pf-image" placeholder="https://images.unsplash.com/photo-…">
+            <p class="hint">
+              Must be an <code>images.unsplash.com</code> URL or a <code>/img/</code>
+              path — the site's security policy blocks other hosts, and they would
+              render as a blank card.
+            </p>
+          </div>
+          <div class="pf-preview" id="pf-preview">No image</div>
+          <label class="check"><input type="checkbox" id="pf-new"> Mark as new</label>
+          <label class="check"><input type="checkbox" id="pf-active" checked> Visible in the shop</label>
+        </div>
+      </div>
+
+      <div class="modal-foot">
+        <button class="btn btn-block btn-lg" type="submit">Save product</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="/js/admin.js" type="module"></script>

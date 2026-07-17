@@ -5,6 +5,7 @@
 // declares success on its own. It polls the server, which reports only what
 // the signature-verified webhook recorded.
 import { formatKobo, apiFetch } from './cart.js';
+import { renderThemeToggle } from './theme.js';
 import { mountFooter } from './footer.js';
 import { currentUser, renderNav } from './auth.js';
 import { connectLive } from './live.js';
@@ -152,6 +153,7 @@ async function poll(attempt = 0) {
 let liveClose = null;
 
 async function boot() {
+  renderThemeToggle(document.getElementById('theme-toggle'));
   renderNav(await currentUser(), document.getElementById('account-nav'));
 
   if (ref) {

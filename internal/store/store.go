@@ -70,6 +70,9 @@ type Product struct {
 	Rating        *float64 `json:"rating,omitempty"`
 	ReviewCount   int      `json:"reviewCount"`
 	IsNew         bool     `json:"isNew"`
+	// Active is only meaningful in the admin view; the storefront never sees
+	// an inactive product.
+	Active bool `json:"active"`
 }
 
 type OrderItem struct {
@@ -121,6 +124,7 @@ func (s *Store) ListProducts(ctx context.Context) ([]Product, error) {
 			&p.Category, &p.Rating, &p.ReviewCount, &p.IsNew); err != nil {
 			return nil, err
 		}
+		p.Active = true // this query filters on active already
 		out = append(out, p)
 	}
 	return out, rows.Err()

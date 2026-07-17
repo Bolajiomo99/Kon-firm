@@ -1,5 +1,6 @@
 // Storefront: carousel, catalogue, bag, and the handoff to Monnify.
 import { Cart, formatKobo, toast, apiFetch } from './cart.js';
+import { renderThemeToggle } from './theme.js';
 import { currentUser, renderNav } from './auth.js';
 import { connectLive } from './live.js';
 import { buildStateSelect, fetchQuote, renderTotals, useMyLocation } from './checkout.js';
@@ -577,6 +578,7 @@ cart.onChange(renderCart);
 
 async function boot() {
   mountFooter();
+  renderThemeToggle(document.getElementById('theme-toggle'));
   user = await currentUser();
   renderNav(user, $('account-nav'));
 

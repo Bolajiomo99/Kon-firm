@@ -6,6 +6,7 @@
 // always available and is not a second-class path: a real counter needs a way
 // to key in a code when a label is scuffed.
 import { Cart, formatKobo, toast, apiFetch } from './cart.js';
+import { renderThemeToggle } from './theme.js';
 import { mountFooter } from './footer.js';
 import { currentUser, renderNav } from './auth.js';
 
@@ -298,6 +299,7 @@ function hideError(node) {
 // The counter is staff-only: it looks up the catalogue by barcode and takes
 // payment. Neither is a public action.
 async function boot() {
+  renderThemeToggle(document.getElementById('theme-toggle'));
   const user = await currentUser();
   renderNav(user, document.getElementById('account-nav'));
   if (!user || user.role !== 'admin') {

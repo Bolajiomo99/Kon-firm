@@ -74,6 +74,10 @@ func (s *Server) Routes(frontend fs.FS) http.Handler {
 	mux.HandleFunc("GET /api/products/barcode/{barcode}", s.requireAdmin(s.handleProductByBarcode))
 	mux.HandleFunc("GET /api/admin/overview", s.requireAdmin(s.handleAdminOverview))
 	mux.HandleFunc("POST /api/admin/orders/{reference}/refund", s.requireAdmin(s.handleRefund))
+	mux.HandleFunc("GET /api/admin/products", s.requireAdmin(s.handleAdminListProducts))
+	mux.HandleFunc("POST /api/admin/products", s.requireAdmin(s.handleCreateProduct))
+	mux.HandleFunc("PUT /api/admin/products/{id}", s.requireAdmin(s.handleUpdateProduct))
+	mux.HandleFunc("DELETE /api/admin/products/{id}", s.requireAdmin(s.handleDeleteProduct))
 
 	// Everything not under /api is the frontend.
 	mux.Handle("/", newStaticHandler(frontend))
@@ -112,8 +116,16 @@ func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		h.Set("X-Frame-Options", "DENY")
-		// The camera is needed on /pos and nowhere else.
-		h.Set("Permissions-Policy", "camera=(self), microphone=(), geolocation=()")
+		// Grant only what the site actually uses, to itself:
+		//   camera      — the POS barcode scanner
+		//   geolocation — "use my current location" at checkout
+		//
+		// `geolocation=()` is an empty allowlist, i.e. NOBODY may use it, not
+		// "the default applies". Writing that here silently disabled the
+		// feature site-wide and surfaced to the shopper as "permission
+		// denied" — a browser reporting our own header back at us. The
+		// difference between () and (self) is the whole feature.
+		h.Set("Permissions-Policy", "camera=(self), geolocation=(self), microphone=(), payment=()")
 		next.ServeHTTP(w, r)
 	})
 }

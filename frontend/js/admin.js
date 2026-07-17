@@ -1,6 +1,8 @@
 // Admin dashboard: revenue, orders across both channels, and live inventory.
 import { formatKobo, apiFetch, toast } from './cart.js';
 import { mountFooter } from './footer.js';
+import { renderThemeToggle } from './theme.js';
+import { initProductForm, openProductForm, renderProductsTable } from './products-admin.js';
 import { currentUser, renderNav } from './auth.js';
 import { connectLive, liveIndicator } from './live.js';
 
@@ -100,55 +102,6 @@ function renderOrders(orders) {
   }
 }
 
-function renderInventory(products) {
-  const body = $('inventory');
-  body.innerHTML = '';
-
-  if (!products.length) {
-    const tr = document.createElement('tr');
-    const td = document.createElement('td');
-    td.colSpan = 5;
-    td.className = 'empty';
-    td.textContent = 'No products.';
-    tr.append(td);
-    body.append(tr);
-    return;
-  }
-
-  for (const p of products) {
-    const tr = document.createElement('tr');
-
-    const sku = document.createElement('td');
-    const code = document.createElement('code');
-    code.className = 'ref';
-    code.textContent = p.sku;
-    sku.append(code);
-
-    const name = document.createElement('td');
-    name.textContent = p.name;
-
-    const bar = document.createElement('td');
-    const bc = document.createElement('code');
-    bc.className = 'ref';
-    bc.textContent = p.barcode || '—';
-    bar.append(bc);
-
-    const price = document.createElement('td');
-    price.className = 'num';
-    price.textContent = formatKobo(p.priceKobo);
-
-    const stock = document.createElement('td');
-    stock.className = 'num';
-    const s = document.createElement('span');
-    s.textContent = String(p.stock);
-    if (p.stock <= 0) s.className = 'stock out';
-    else if (p.stock <= 5) s.className = 'stock low';
-    stock.append(s);
-
-    tr.append(sku, name, bar, price, stock);
-    body.append(tr);
-  }
-}
 
 // Refunding is money leaving the business, so it asks first. A single
 // mis-click on a table row must not be able to return someone's payment.
@@ -184,13 +137,14 @@ async function load() {
   $('error').hidden = true;
   try {
     // Both requests are independent; fire them together rather than serially.
+    // The admin list includes hidden products; the storefront list does not.
     const [overview, products] = await Promise.all([
       apiFetch('/api/admin/overview'),
-      apiFetch('/api/products'),
+      apiFetch('/api/admin/products'),
     ]);
     renderStats(overview.summary);
     renderOrders(overview.recent);
-    renderInventory(products);
+    renderProductsTable(products, $('inventory'));
     if (overview.refunds) renderRefunds(overview.refunds);
   } catch (err) {
     $('error').textContent = `Could not load the dashboard: ${err.message}`;
@@ -256,6 +210,10 @@ async function boot() {
     window.location.href = '/login?next=/admin';
     return;
   }
+  renderThemeToggle($('theme-toggle'));
+  initProductForm();
+  $('add-product').addEventListener('click', () => openProductForm(null));
+  document.addEventListener('products:changed', load);
   $('refresh').addEventListener('click', load);
   await load();
 
