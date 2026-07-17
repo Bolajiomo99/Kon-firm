@@ -3,93 +3,103 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kon-firm — Omnichannel commerce, confirmed by Monnify</title>
-<meta name="description" content="Kon-firm is an omnichannel storefront and point-of-sale for Nigerian merchants. One inventory, one ledger, online and in-store — settled by Monnify.">
-<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+<title>Kon-firm — Fashion, gadgets and everyday essentials</title>
+<meta name="description" content="Kon-firm is a Lagos storefront for fashion, gadgets and accessories. Every payment confirmed by Monnify before your order is released.">
+<meta name="theme-color" content="#7c3aed">
+<link rel="icon" href="/img/favicon-64.png" type="image/png">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
 <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
+<div class="announce">
+  Free delivery within Lagos on orders over ₦50,000 · <strong>Every payment confirmed by Monnify</strong>
+</div>
+
 <header class="site-header">
   <div class="wrap nav">
-    <a class="brand" href="/">
-      <span class="brand-mark" aria-hidden="true">K</span>
+    <a class="brand" href="/" aria-label="Kon-firm home">
+      <img class="logo-img" src="/img/logo-512.png" alt="" width="512" height="512">
       <span class="brand-text">Kon-firm</span>
     </a>
     <nav class="nav-links" aria-label="Main">
-      <a href="/" aria-current="page">Store</a>
-      <span id="account-nav" style="display:flex;gap:4px;align-items:center"></span>
-      <button class="btn btn-sm cart-btn" id="cart-open" aria-haspopup="dialog">
-        Cart
+      <span id="account-nav"></span>
+      <button class="btn btn-sm btn-dark cart-btn" id="cart-open" aria-haspopup="dialog">
+        Bag
         <span class="cart-count" id="cart-count" hidden>0</span>
       </button>
     </nav>
+  </div>
+  <div class="cat-bar">
+    <div class="wrap">
+      <ul class="cat-list" id="categories" aria-label="Product categories"></ul>
+    </div>
   </div>
 </header>
 
 <main id="main">
 
-  <section class="hero">
-    <div class="wrap hero-grid">
-      <div>
-        <span class="eyebrow"><span class="dot" aria-hidden="true"></span> Monnify Sandbox · Test Mode</span>
-        <h1>One inventory.<br>Two counters.<br>Every naira confirmed.</h1>
-        <p class="lede">
-          Nigerian merchants sell in a shop <em>and</em> online, then reconcile two
-          sets of books by hand at closing. Kon-firm makes the web store and the
-          shop counter the same system — every sale, from either side, settled and
-          confirmed by Monnify.
-        </p>
-        <div class="hero-cta">
-          <a class="btn btn-lg" href="#catalogue">Browse the store</a>
-          <a class="btn btn-lg btn-secondary" href="/signup">Create an account</a>
-        </div>
-      </div>
+  <section class="carousel" id="carousel" aria-roledescription="carousel" aria-label="Featured">
+    <div class="slides" id="slides"></div>
+    <button class="carousel-arrow prev" id="slide-prev" aria-label="Previous slide">‹</button>
+    <button class="carousel-arrow next" id="slide-next" aria-label="Next slide">›</button>
+    <div class="carousel-dots" id="slide-dots" aria-label="Choose slide"></div>
+  </section>
 
-      <div class="hero-card">
-        <h3 style="margin-bottom:6px">How a payment gets confirmed</h3>
-        <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:10px">
-          The browser never decides what was paid.
-        </p>
-        <div class="flow-step">
-          <span class="flow-num">1</span>
-          <div><strong>Cart is priced server-side</strong>
-          <span>The client sends product IDs; the server sets the price.</span></div>
+  <section class="trust" aria-label="Why shop with us">
+    <div class="wrap-wide">
+      <div class="trust-grid">
+        <div class="trust-item">
+          <span class="ic" aria-hidden="true">🔒</span>
+          <div>
+            <strong>Payments confirmed by Monnify</strong>
+            <span>Your order is only released once payment is verified.</span>
+          </div>
         </div>
-        <div class="flow-step">
-          <span class="flow-num">2</span>
-          <div><strong>Monnify initialises the transaction</strong>
-          <span>We receive a checkout URL, valid for 40 minutes.</span></div>
+        <div class="trust-item">
+          <span class="ic" aria-hidden="true">🚚</span>
+          <div>
+            <strong>Lagos delivery in 48 hours</strong>
+            <span>Nationwide dispatch within 3–5 working days.</span>
+          </div>
         </div>
-        <div class="flow-step">
-          <span class="flow-num">3</span>
-          <div><strong>Customer pays on Monnify</strong>
-          <span>Card details never touch our servers.</span></div>
+        <div class="trust-item">
+          <span class="ic" aria-hidden="true">↩️</span>
+          <div>
+            <strong>7-day returns</strong>
+            <span>Refunds go straight back to the account you paid from.</span>
+          </div>
         </div>
-        <div class="flow-step">
-          <span class="flow-num">4</span>
-          <div><strong>Signed webhook settles the order</strong>
-          <span>HMAC-SHA512 verified. Replays are ignored, never double-counted.</span></div>
+        <div class="trust-item">
+          <span class="ic" aria-hidden="true">💬</span>
+          <div>
+            <strong>Your number is your account</strong>
+            <span>Sign in with WhatsApp — no long forms.</span>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <div class="partner">
-    <div class="wrap partner-inner">
-      <span>Payments partnered with</span>
-      <strong class="monnify-word">Monnify</strong>
-    </div>
-  </div>
-
   <section class="section" id="catalogue">
     <div class="wrap">
       <div class="section-head">
-        <h2>The catalogue</h2>
-        <p>Six goods from Nigerian makers. Stock is live — it decrements only when
-           Monnify confirms a payment, never when a cart is filled.</p>
+        <div>
+          <h2 id="cat-title">Everything</h2>
+          <p id="cat-count">Loading…</p>
+        </div>
+        <div class="field" style="margin:0;min-width:190px">
+          <label for="sort" class="sr-only">Sort products</label>
+          <select id="sort">
+            <option value="featured">Featured</option>
+            <option value="price-asc">Price: low to high</option>
+            <option value="price-desc">Price: high to low</option>
+            <option value="rating">Best rated</option>
+          </select>
+        </div>
       </div>
+
       <div class="error-box" id="products-error" hidden role="alert"></div>
       <div class="grid" id="products" aria-busy="true">
         <p class="empty">Loading the catalogue…</p>
@@ -99,12 +109,11 @@
 
 </main>
 
-<!-- Cart -->
 <div class="backdrop" id="backdrop" hidden></div>
 <aside class="cart-panel" id="cart" role="dialog" aria-modal="true" aria-labelledby="cart-title" aria-hidden="true">
   <div class="cart-head">
-    <h2 id="cart-title">Your cart</h2>
-    <button class="btn btn-sm btn-secondary" id="cart-close" aria-label="Close cart">Close</button>
+    <h2 id="cart-title">Your bag</h2>
+    <button class="btn btn-sm btn-secondary" id="cart-close" aria-label="Close bag">Close</button>
   </div>
   <div class="cart-items" id="cart-items"></div>
   <div class="cart-foot">
@@ -116,18 +125,17 @@
     <form id="checkout-form" novalidate>
       <div class="field">
         <label for="name">Full name</label>
-        <input id="name" name="name" autocomplete="name" required placeholder="Ada Lovelace">
+        <input id="name" name="name" autocomplete="name" required placeholder="Zainab Wahab">
       </div>
       <div class="field">
         <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="email" required placeholder="ada@example.com">
+        <input id="email" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+        <p class="hint">Your receipt goes here.</p>
       </div>
-      <button class="btn btn-block btn-lg" id="checkout-btn" type="submit" disabled>
-        Pay with Monnify
-      </button>
+      <button class="btn btn-block btn-lg" id="checkout-btn" type="submit">Pay with Monnify</button>
     </form>
-    <p style="font-size:.76rem;color:var(--text-muted);margin:10px 0 0;text-align:center">
-      Sandbox mode — no real money moves.
+    <p class="hint" style="text-align:center;margin-top:10px">
+      🔒 Card details never touch our servers.
     </p>
   </div>
 </aside>
@@ -136,40 +144,46 @@
   <div class="wrap">
     <div class="footer-grid">
       <div>
-        <a class="brand" href="/" style="margin-bottom:12px">
-          <span class="brand-mark" aria-hidden="true">K</span>
-          <span class="brand-text">Kon-firm</span>
+        <a class="brand" href="/" style="margin-bottom:14px">
+          <img class="logo-img" src="/img/logo-512.png" alt="" width="512" height="512" style="height:34px">
+          <span class="brand-text" style="font-size:1.05rem">Kon-firm</span>
         </a>
         <p class="footer-blurb">
-          Omnichannel commerce for Nigerian merchants. One inventory, one ledger,
-          every sale confirmed by Monnify.
+          Fashion, gadgets and everyday essentials — sold online and across the
+          counter, from one inventory. Every naira confirmed before dispatch.
         </p>
       </div>
       <div>
-        <h4>Product</h4>
+        <h4>Shop</h4>
         <ul>
-          <li><a href="/">Store</a></li>
+          <li><a href="/#catalogue">All products</a></li>
           <li><a href="/orders">My orders</a></li>
-          <li><a href="/login">Sign in</a></li>
+          <li><a href="/signup">Create account</a></li>
         </ul>
       </div>
       <div>
-        <h4>Resources</h4>
+        <h4>Account</h4>
         <ul>
+          <li><a href="/login">Sign in</a></li>
+          <li><a href="/orders">Track an order</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Built with</h4>
+        <ul>
+          <li><a href="https://developers.monnify.com/">Monnify API</a></li>
           <li><a href="https://github.com/Bolajiomo99/Kon-firm">Source code</a></li>
-          <li><a href="https://developers.monnify.com/">Monnify docs</a></li>
         </ul>
       </div>
     </div>
     <div class="footer-bottom">
-      <span>© 2026 Kon-firm</span>
-      <span>Built with Monnify Sandbox APIs · Test mode only</span>
+      <span>© 2026 Kon-firm · Lagos, Nigeria</span>
+      <span class="pay-mark">🔒 Payments secured by Monnify</span>
     </div>
   </div>
 </footer>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
 <script src="/js/store.js" type="module"></script>
 </body>
 </html>

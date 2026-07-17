@@ -55,8 +55,15 @@ type Product struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	PriceKobo   int64  `json:"priceKobo"`
-	Stock       int    `json:"stock"`
-	ImageURL    string `json:"imageUrl"`
+	// CompareAtKobo is the pre-sale price, nil when nothing is discounted.
+	// A pointer rather than 0 so "not on sale" and "free" cannot be confused.
+	CompareAtKobo *int64   `json:"compareAtKobo,omitempty"`
+	Stock         int      `json:"stock"`
+	ImageURL      string   `json:"imageUrl"`
+	Category      string   `json:"category"`
+	Rating        *float64 `json:"rating,omitempty"`
+	ReviewCount   int      `json:"reviewCount"`
+	IsNew         bool     `json:"isNew"`
 }
 
 type OrderItem struct {
@@ -85,8 +92,10 @@ type Order struct {
 
 func (s *Store) ListProducts(ctx context.Context) ([]Product, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, sku, COALESCE(barcode,''), name, description, price_kobo, stock, image_url
-		FROM products WHERE active = TRUE ORDER BY name`)
+		SELECT id, sku, COALESCE(barcode,''), name, description, price_kobo,
+		       compare_at_kobo, stock, image_url, category, rating, review_count, is_new
+		FROM products WHERE active = TRUE
+		ORDER BY category, is_new DESC, name`)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +105,8 @@ func (s *Store) ListProducts(ctx context.Context) ([]Product, error) {
 	for rows.Next() {
 		var p Product
 		if err := rows.Scan(&p.ID, &p.SKU, &p.Barcode, &p.Name, &p.Description,
-			&p.PriceKobo, &p.Stock, &p.ImageURL); err != nil {
+			&p.PriceKobo, &p.CompareAtKobo, &p.Stock, &p.ImageURL,
+			&p.Category, &p.Rating, &p.ReviewCount, &p.IsNew); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -108,9 +118,12 @@ func (s *Store) ListProducts(ctx context.Context) ([]Product, error) {
 func (s *Store) ProductByBarcode(ctx context.Context, barcode string) (*Product, error) {
 	var p Product
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, sku, COALESCE(barcode,''), name, description, price_kobo, stock, image_url
+		SELECT id, sku, COALESCE(barcode,''), name, description, price_kobo,
+		       compare_at_kobo, stock, image_url, category, rating, review_count, is_new
 		FROM products WHERE barcode = $1 AND active = TRUE`, barcode).
-		Scan(&p.ID, &p.SKU, &p.Barcode, &p.Name, &p.Description, &p.PriceKobo, &p.Stock, &p.ImageURL)
+		Scan(&p.ID, &p.SKU, &p.Barcode, &p.Name, &p.Description, &p.PriceKobo,
+			&p.CompareAtKobo, &p.Stock, &p.ImageURL, &p.Category, &p.Rating,
+			&p.ReviewCount, &p.IsNew)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}

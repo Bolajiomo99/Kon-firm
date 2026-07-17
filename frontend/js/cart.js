@@ -66,12 +66,16 @@ export class Cart {
     if (existing) {
       existing.quantity += qty;
     } else {
+      // Name, price and image are cached for display only. The server prices
+      // the order from product IDs at checkout, so a stale copy here can make
+      // the bag look wrong for a moment — never make the charge wrong.
       this.lines.push({
         productId: product.id,
         quantity: qty,
         name: product.name,
         priceKobo: product.priceKobo,
         stock: product.stock,
+        imageUrl: product.imageUrl || '',
       });
     }
     this.#save();

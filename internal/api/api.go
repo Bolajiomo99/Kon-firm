@@ -84,14 +84,20 @@ func (s *Server) Routes(frontend fs.FS) http.Handler {
 
 // withSecurityHeaders applies a conservative baseline to every response.
 //
-// The CSP is strict because it can be: the frontend loads no third-party
-// scripts, fonts, or images, so nothing legitimate needs a wider policy.
+// The CSP stays as tight as the page allows. Product photography comes from
+// Unsplash, so img-src names that one origin and nothing else does: scripts,
+// styles, and fetches remain 'self', which means the image host can never run
+// code in the page or be sent anything.
 func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
 	csp := strings.Join([]string{
 		"default-src 'self'",
 		"script-src 'self'",
 		"style-src 'self' 'unsafe-inline'", // small inline blocks in the page heads
-		"img-src 'self' data:",
+		// Product photography is served from Unsplash's CDN. This is the only
+		// third-party origin the page may touch, and only for images —
+		// script-src and connect-src stay 'self', so the CDN can never run
+		// code or receive data.
+		"img-src 'self' data: https://images.unsplash.com",
 		"connect-src 'self'",
 		"media-src 'self' blob:", // the POS camera stream
 		"frame-ancestors 'none'",
