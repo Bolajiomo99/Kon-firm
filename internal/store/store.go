@@ -193,8 +193,8 @@ func (s *Store) CreateOrder(ctx context.Context, ref, name, email, channel strin
 	items := make([]OrderItem, 0, len(lines))
 
 	for _, l := range lines {
-		if l.Quantity <= 0 {
-			return nil, fmt.Errorf("store: quantity must be positive for product %d", l.ProductID)
+		if err := ValidateQuantity(l.Quantity); err != nil {
+			return nil, err
 		}
 
 		var name string

@@ -32,6 +32,40 @@ const (
 	FreeDeliveryThresholdKobo int64 = 5000000 // ₦50,000
 )
 
+// Sanity bounds on a basket.
+//
+// Not arbitrary politeness: without an upper bound, price × quantity overflows
+// int64 and wraps NEGATIVE — 3,400,000 × 9,223,372,036,854,775,807 is
+// -3,400,000. Go does not panic on integer overflow, so the arithmetic
+// silently produces a wrong, plausible-looking number instead of an error.
+//
+// The stock check would refuse such an order anyway, so no money was ever at
+// risk. But a quote endpoint that will happily report ₦33 trillion is a bug on
+// its own, and relying on a check two layers away to save the arithmetic is
+// how the layer without the check eventually gets called from somewhere new.
+const (
+	// 10,000 of one item is far beyond any real order and far below overflow.
+	MaxQuantity = 10_000
+	// 50 distinct products in one basket.
+	MaxBasketLines = 50
+	// ₦100,000,000. Above this it is not a shopping basket.
+	MaxBasketKobo int64 = 10_000_000_000
+)
+
+// ErrUnreasonableBasket means the basket is outside sane bounds.
+var ErrUnreasonableBasket = errors.New("store: unreasonable basket")
+
+// ValidateQuantity bounds a line quantity.
+func ValidateQuantity(q int) error {
+	if q <= 0 {
+		return fmt.Errorf("%w: quantity must be at least 1", ErrUnreasonableBasket)
+	}
+	if q > MaxQuantity {
+		return fmt.Errorf("%w: at most %d of one item per order", ErrUnreasonableBasket, MaxQuantity)
+	}
+	return nil
+}
+
 var (
 	ErrVoucherNotFound = errors.New("store: that voucher code is not valid")
 	ErrVoucherExpired  = errors.New("store: that voucher has expired")
@@ -204,10 +238,14 @@ func (s *Store) PriceBasket(ctx context.Context, lines []CreateOrderLine) (int64
 	if len(lines) == 0 {
 		return 0, fmt.Errorf("store: empty basket")
 	}
+	if len(lines) > MaxBasketLines {
+		return 0, fmt.Errorf("%w: a basket may hold at most %d different products", ErrUnreasonableBasket, MaxBasketLines)
+	}
+
 	var subtotal int64
 	for _, l := range lines {
-		if l.Quantity <= 0 {
-			return 0, fmt.Errorf("store: quantity must be positive for product %d", l.ProductID)
+		if err := ValidateQuantity(l.Quantity); err != nil {
+			return 0, err
 		}
 		var price int64
 		err := s.pool.QueryRow(ctx,
@@ -218,7 +256,18 @@ func (s *Store) PriceBasket(ctx context.Context, lines []CreateOrderLine) (int64
 		if err != nil {
 			return 0, err
 		}
-		subtotal += price * int64(l.Quantity)
+
+		// Bounded quantities make this multiplication safe, but the check is
+		// here anyway: an overflow does not error, it silently wraps to a
+		// negative price, and a wrong number is worse than a rejected one.
+		line := price * int64(l.Quantity)
+		if line < 0 || (price > 0 && line/price != int64(l.Quantity)) {
+			return 0, fmt.Errorf("%w: that quantity overflows", ErrUnreasonableBasket)
+		}
+		if subtotal > MaxBasketKobo-line {
+			return 0, fmt.Errorf("%w: a basket may not exceed ₦%d", ErrUnreasonableBasket, MaxBasketKobo/100)
+		}
+		subtotal += line
 	}
 	return subtotal, nil
 }

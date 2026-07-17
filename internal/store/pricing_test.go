@@ -174,3 +174,58 @@ func TestBuildQuote(t *testing.T) {
 		}
 	})
 }
+
+// TestValidateQuantity_BoundsOverflow pins the bound that stops int64 from
+// wrapping.
+//
+// Found by attacking the live quote endpoint: quantity 9223372036854775807
+// against a ₦34,000 item produced a subtotal of -3,400,000. Go does not panic
+// on integer overflow — the multiplication silently wraps and returns a wrong,
+// plausible number. The stock check refused the order, so no money was ever at
+// risk, but a quote endpoint reporting ₦33 trillion is a defect regardless,
+// and leaning on a check two layers away is how the unchecked layer eventually
+// gets called from somewhere new.
+func TestValidateQuantity_BoundsOverflow(t *testing.T) {
+	cases := []struct {
+		name string
+		q    int
+		ok   bool
+	}{
+		{"one", 1, true},
+		{"a big but real order", 500, true},
+		{"the cap", MaxQuantity, true},
+		{"just over the cap", MaxQuantity + 1, false},
+		{"zero", 0, false},
+		{"negative", -1, false},
+		{"the value that wrapped int64 in production", 9223372036854775807, false},
+		{"half of int64", 4611686018427387904, false},
+		{"a billion", 999999999, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := ValidateQuantity(c.q)
+			if (err == nil) != c.ok {
+				t.Errorf("ValidateQuantity(%d) = %v, wantOK=%v", c.q, err, c.ok)
+			}
+		})
+	}
+}
+
+// TestMaxQuantity_CannotOverflow proves the cap is actually safe against the
+// most expensive thing the shop could ever sell — a bound that still overflows
+// is not a bound.
+func TestMaxQuantity_CannotOverflow(t *testing.T) {
+	// A deliberately absurd unit price: ₦1,000,000,000 in kobo.
+	const absurdPrice int64 = 100_000_000_000
+
+	line := absurdPrice * int64(MaxQuantity)
+	if line < 0 {
+		t.Fatalf("MaxQuantity (%d) still overflows at a price of %d kobo: got %d",
+			MaxQuantity, absurdPrice, line)
+	}
+	// And a whole basket of them must stay inside int64.
+	if MaxBasketLines > 0 && line > (1<<62)/int64(MaxBasketLines) {
+		t.Errorf("a full basket of %d lines at %d each could overflow", MaxBasketLines, line)
+	}
+	t.Logf("worst case line: %d kobo (int64 max is %d)", line, int64(^uint64(0)>>1))
+}

@@ -148,6 +148,11 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "one or more products are unavailable")
 			return
 		}
+		// A basket outside sane bounds is the caller's mistake, not ours.
+		if errors.Is(err, store.ErrUnreasonableBasket) {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		s.log.Error("checkout: price basket", "err", err)
 		writeError(w, http.StatusInternalServerError, "could not price your basket")
 		return
