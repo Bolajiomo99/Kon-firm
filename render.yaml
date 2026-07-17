@@ -47,11 +47,12 @@ services:
       - key: KONFIRM_ADMIN_NAME
         value: Store Manager
 
-      # ENV=production turns on Secure cookies and the __Host- prefix. Setting
-      # this to anything else on a public deployment sends session cookies
-      # without the Secure flag.
-      # Email receipts. Without these a customer whose browser was not
-      # redirected back from Monnify has no proof of purchase at all.
+      # Email receipts. Without these, a customer whose browser was not
+      # redirected back from Monnify has no proof of purchase at all — no
+      # receipt page, and for a guest, no order history either.
+      #
+      # Any SMTP server. For Gmail: enable 2-Step Verification, create an App
+      # Password, and use that — never an account password.
       - key: SMTP_HOST
         sync: false
       - key: SMTP_USERNAME
@@ -63,5 +64,8 @@ services:
       - key: SMTP_PORT
         value: "587"
 
+      # ENV=production turns on Secure cookies and the __Host- prefix. Setting
+      # this to anything else on a public deployment sends session cookies
+      # without the Secure flag.
       - key: ENV
         value: production
