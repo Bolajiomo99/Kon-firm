@@ -168,9 +168,9 @@ func (c *Client) do(req *http.Request, out any) error {
 
 // InitTransactionRequest is the payload for initialising a one-time payment.
 type InitTransactionRequest struct {
-	Amount        float64  `json:"amount"`
-	CustomerName  string   `json:"customerName"`
-	CustomerEmail string   `json:"customerEmail"`
+	Amount        float64 `json:"amount"`
+	CustomerName  string  `json:"customerName"`
+	CustomerEmail string  `json:"customerEmail"`
 	// PaymentReference must be unique per transaction; reusing one is rejected.
 	PaymentReference   string   `json:"paymentReference"`
 	PaymentDescription string   `json:"paymentDescription"`
@@ -183,10 +183,10 @@ type InitTransactionRequest struct {
 // InitTransactionResponse carries the checkout URL to send the customer to.
 // The checkout URL is valid for 40 minutes.
 type InitTransactionResponse struct {
-	TransactionReference string `json:"transactionReference"`
-	PaymentReference     string `json:"paymentReference"`
-	MerchantName         string `json:"merchantName"`
-	CheckoutURL          string `json:"checkoutUrl"`
+	TransactionReference string   `json:"transactionReference"`
+	PaymentReference     string   `json:"paymentReference"`
+	MerchantName         string   `json:"merchantName"`
+	CheckoutURL          string   `json:"checkoutUrl"`
 	EnabledPaymentMethod []string `json:"enabledPaymentMethod"`
 }
 

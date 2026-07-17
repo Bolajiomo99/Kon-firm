@@ -19,9 +19,9 @@ func TestReceiptRenders(t *testing.T) {
 		Subtotal: "₦65,500.00", Discount: "₦6,550.00", VoucherCode: "WELCOME10",
 		Delivery: "₦2,000.00", FreeDelivery: false,
 		Total: "₦60,950.00", VAT: "₦4,252.33", VATRate: "7.5%",
-		Address: "12 Balogun Street, Lagos Island, Lagos",
+		Address:    "12 Balogun Street, Lagos Island, Lagos",
 		ReceiptURL: "https://konfirm.onrender.com/payment/callback?paymentReference=KF-1784276894-b64e34d9",
-		Year: 2026,
+		Year:       2026,
 	}
 	var b bytes.Buffer
 	if err := receiptTmpl.Execute(&b, r); err != nil {
