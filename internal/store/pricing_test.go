@@ -97,6 +97,13 @@ func TestVoucher_DiscountFor(t *testing.T) {
 		}
 	})
 
+	t.Run("percent overflow clamps to the basket", func(t *testing.T) {
+		v := Voucher{Kind: "percent", Value: int64(^uint64(0) >> 1)}
+		if got := v.DiscountFor(100000); got != 100000 {
+			t.Errorf("overflowing percent discount = %d, want %d", got, 100000)
+		}
+	})
+
 	t.Run("fixed", func(t *testing.T) {
 		v := Voucher{Kind: "fixed", Value: 500000}
 		if got := v.DiscountFor(5000000); got != 500000 {
