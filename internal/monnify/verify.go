@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // Payment status values Monnify reports.
@@ -28,23 +29,55 @@ const (
 // This is the authoritative answer to "was this actually paid?" — asked of
 // Monnify directly, over an authenticated channel, rather than inferred from
 // a push we might never receive.
+//
+// These field names are taken from an actual sandbox response, not from the
+// documentation. An earlier version of this struct was written from the docs
+// and invented completedOn, payableAmount, fee, currencyCode and
+// customerName — none of which Monnify sends. Absent JSON keys do not error;
+// they leave zero values, so the bug surfaced as a paidAt of 0001-01-01
+// rather than as anything that looked like a failure.
+//
+// Verified response shape:
+//
+//	{"transactionReference":"MNFY|41|...","paymentReference":"KF-...",
+//	 "amountPaid":"45000.00","totalPayable":"45000.00",
+//	 "settlementAmount":"44990.00","paidOn":"2026-07-17 03:14:51.0",
+//	 "paymentStatus":"PAID","paymentMethod":"ACCOUNT_TRANSFER",
+//	 "currency":"NGN","customer":{"name":"...","email":"..."}}
 type Transaction struct {
 	TransactionReference string `json:"transactionReference"`
 	PaymentReference     string `json:"paymentReference"`
 	PaymentStatus        string `json:"paymentStatus"`
 	PaymentMethod        string `json:"paymentMethod"`
-	CurrencyCode         string `json:"currencyCode"`
-	CustomerName         string `json:"customerName"`
-	CustomerEmail        string `json:"customerEmail"`
-	Completed            bool   `json:"completed"`
-	CompletedOn          Time   `json:"completedOn"`
-	CreatedOn            Time   `json:"createdOn"`
-	// Amounts arrive quoted from this endpoint but unquoted on webhooks, so
-	// they go through the tolerant type.
-	Amount        Amount `json:"amount"`
-	AmountPaid    Amount `json:"amountPaid"`
-	PayableAmount Amount `json:"payableAmount"`
-	Fee           Amount `json:"fee"`
+	PaymentDescription   string `json:"paymentDescription"`
+	Currency             string `json:"currency"`
+	PaidOn               Time   `json:"paidOn"`
+	// Amounts come back quoted here ("45000.00"), so they go through the
+	// tolerant type rather than float64.
+	AmountPaid   Amount `json:"amountPaid"`
+	TotalPayable Amount `json:"totalPayable"`
+	// SettlementAmount is AmountPaid minus Monnify's fee — what the merchant
+	// actually receives.
+	SettlementAmount Amount   `json:"settlementAmount"`
+	Customer         Customer `json:"customer"`
+}
+
+// FeeKobo is what Monnify keeps: the gap between what the customer paid and
+// what gets settled to the merchant.
+func (t *Transaction) FeeKobo() int64 {
+	if t.SettlementAmount == 0 {
+		return 0 // not reported; do not invent a fee
+	}
+	return t.AmountPaid.Kobo() - t.SettlementAmount.Kobo()
+}
+
+// PaidOnOr returns the payment time, or fallback if Monnify sent a timestamp
+// we could not read.
+func (t *Transaction) PaidOnOr(fallback time.Time) time.Time {
+	if t.PaidOn.IsZero() {
+		return fallback
+	}
+	return t.PaidOn.Time
 }
 
 // Paid reports whether money actually landed. OVERPAID counts: the customer

@@ -321,7 +321,7 @@ func (s *Server) reconcile(ctx context.Context, order *store.Order) *store.Order
 		EventType:      "RECONCILED_VERIFICATION",
 		AmountPaidKobo: paidKobo,
 		PaymentMethod:  tx.PaymentMethod,
-		PaidAt:         tx.CompletedOn.Time,
+		PaidAt:         tx.PaidOnOr(time.Now().UTC()),
 		Success:        true,
 		RawPayload:     raw,
 	})
