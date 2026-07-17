@@ -4,7 +4,7 @@
 // proves nothing — it can be replayed, or typed by hand — so this page never
 // declares success on its own. It polls the server, which reports only what
 // the signature-verified webhook recorded.
-import { formatKobo, apiFetch } from './cart.js';
+import { formatKobo, apiFetch, forgetOrder } from './cart.js';
 import { renderThemeToggle } from './theme.js';
 import { mountFooter } from './footer.js';
 import { currentUser, renderNav } from './auth.js';
@@ -123,6 +123,7 @@ async function poll(attempt = 0) {
 
   if (order.status === 'paid') {
     setState('Payment confirmed', 'Monnify confirmed this payment and the order is settled.', 'paid');
+    forgetOrder(); // they have seen it; stop offering it on the storefront
     liveClose?.();
     return;
   }

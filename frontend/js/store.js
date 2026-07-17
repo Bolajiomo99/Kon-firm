@@ -1,5 +1,5 @@
 // Storefront: carousel, catalogue, bag, and the handoff to Monnify.
-import { Cart, formatKobo, toast, apiFetch } from './cart.js';
+import { Cart, formatKobo, toast, apiFetch, rememberOrder, recallOrder, forgetOrder } from './cart.js';
 import { renderThemeToggle } from './theme.js';
 import { currentUser, renderNav } from './auth.js';
 import { connectLive } from './live.js';
@@ -562,9 +562,9 @@ el.form.addEventListener('submit', async (e) => {
       }),
     });
 
-    try {
-      sessionStorage.setItem('konfirm.lastRef', res.reference);
-    } catch { /* non-fatal */ }
+    // Remember it before leaving for Monnify. If their page never sends the
+    // customer back — or they close it — this is how they find their receipt.
+    rememberOrder(res.reference);
 
     cart.clear();
     window.location.href = res.checkoutUrl;
@@ -594,6 +594,57 @@ el.openBtn.addEventListener('click', openCart);
 el.closeBtn.addEventListener('click', closeCart);
 el.backdrop.addEventListener('click', closeCart);
 cart.onChange(renderCart);
+
+// If a previous order is unfinished, say so. A customer who paid and was not
+// redirected has otherwise no way back to their receipt — especially a guest,
+// who has no order history to look in.
+async function offerPendingOrder() {
+  const ref = recallOrder();
+  if (!ref) return;
+
+  let order;
+  try {
+    order = await apiFetch(`/api/orders/${encodeURIComponent(ref)}`);
+  } catch {
+    forgetOrder(); // unknown reference; nothing useful to offer
+    return;
+  }
+
+  // Settled and seen: nothing to chase.
+  if (order.status === 'failed' || order.status === 'expired') {
+    forgetOrder();
+    return;
+  }
+
+  const bar = document.getElementById('pending-bar');
+  if (!bar) return;
+
+  const paid = order.status === 'paid';
+  bar.innerHTML = '';
+  bar.className = 'pending-bar' + (paid ? ' is-paid' : '');
+
+  const text = document.createElement('span');
+  text.textContent = paid
+    ? `Your order ${order.reference} is confirmed — ${formatKobo(order.totalKobo)}.`
+    : `You have an order waiting for payment — ${formatKobo(order.totalKobo)}.`;
+
+  const view = document.createElement('a');
+  view.className = 'btn btn-sm';
+  view.href = `/payment/callback?paymentReference=${encodeURIComponent(order.reference)}`;
+  view.textContent = paid ? 'View receipt' : 'Check payment';
+
+  const dismiss = document.createElement('button');
+  dismiss.className = 'pending-x';
+  dismiss.type = 'button';
+  dismiss.setAttribute('aria-label', 'Dismiss');
+  dismiss.textContent = '×';
+  dismiss.addEventListener('click', () => { forgetOrder(); bar.hidden = true; });
+
+  bar.append(text, view, dismiss);
+  bar.hidden = false;
+
+  if (paid) forgetOrder(); // shown once; the receipt lives in the account now
+}
 
 async function boot() {
   mountFooter();
@@ -646,6 +697,7 @@ async function boot() {
     if (e.key === 'Enter') { e.preventDefault(); el.voucherBtn.click(); }
   });
 
+  offerPendingOrder();
   buildCarousel();
   renderCart();
   await loadProducts();

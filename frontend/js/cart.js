@@ -149,3 +149,46 @@ export async function apiFetch(url, options) {
   }
   return body;
 }
+
+/* ---------- Pending order recovery ---------- */
+
+// Remembering an order across the trip to Monnify.
+//
+// sessionStorage dies with the tab, and Monnify's page is a full navigation
+// away — if the customer closes it, opens the shop fresh, or the redirect
+// never fires, the reference is gone and a guest has no other way to find
+// their receipt. localStorage survives all of that.
+//
+// The receipt itself is never trusted to this: it only holds a reference, and
+// the server still decides whether that order was paid.
+const PENDING_KEY = 'konfirm.pendingOrder';
+
+export function rememberOrder(reference) {
+  try {
+    localStorage.setItem(PENDING_KEY, JSON.stringify({ reference, at: Date.now() }));
+    sessionStorage.setItem('konfirm.lastRef', reference); // fast path for the callback page
+  } catch { /* private browsing */ }
+}
+
+export function recallOrder() {
+  try {
+    const raw = localStorage.getItem(PENDING_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    // A checkout URL is valid for 40 minutes; after a day this is stale and
+    // nagging about it is worse than forgetting it.
+    if (!o.reference || Date.now() - o.at > 24 * 60 * 60 * 1000) {
+      localStorage.removeItem(PENDING_KEY);
+      return null;
+    }
+    return o.reference;
+  } catch {
+    return null;
+  }
+}
+
+export function forgetOrder() {
+  try {
+    localStorage.removeItem(PENDING_KEY);
+  } catch { /* nothing to do */ }
+}
