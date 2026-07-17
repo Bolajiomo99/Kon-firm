@@ -537,3 +537,36 @@ code.ref { font-family: var(--mono); font-size: 0.78rem; color: var(--text-muted
   }
   .slides { transition: none; }
 }
+
+/* ---------- Checkout ---------- */
+.fieldset { border: 0; padding: 0; margin: 0 0 16px; }
+.fieldset legend {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-muted); font-weight: 700; padding: 0; margin-bottom: 10px;
+}
+.two-up { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.voucher-row { display: flex; gap: 8px; align-items: flex-start; }
+.signed-as {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--primary-soft); border-radius: var(--radius);
+  padding: 10px 12px; margin-bottom: 16px; font-size: 0.84rem;
+}
+.signed-as strong { display: block; }
+.signed-as span { color: var(--text-muted); font-size: 0.78rem; }
+
+.totals {
+  border-top: 1px solid var(--border); margin-top: 4px; padding-top: 12px; margin-bottom: 14px;
+}
+.totals-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 0.88rem; padding: 4px 0; font-variant-numeric: tabular-nums;
+}
+.totals-row span:first-child { color: var(--text-muted); }
+.totals-row.grand {
+  border-top: 1px solid var(--border); margin-top: 8px; padding-top: 12px;
+  font-size: 1rem;
+}
+.totals-row.grand span:first-child { color: var(--text); font-weight: 600; }
+.totals-row .free { color: var(--green-600); font-weight: 600; }
+.totals-row .off { color: var(--red-600); font-weight: 600; }
+.vat-note { font-size: 0.72rem; color: var(--text-muted); margin: 6px 0 0; text-align: right; }

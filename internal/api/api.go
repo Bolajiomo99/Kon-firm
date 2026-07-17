@@ -54,6 +54,7 @@ func (s *Server) Routes(frontend fs.FS) http.Handler {
 	// Public.
 	mux.HandleFunc("GET /api/health", s.handleHealth)
 	mux.HandleFunc("GET /api/products", s.handleListProducts)
+	mux.HandleFunc("POST /api/quote", s.handleQuote)
 	mux.HandleFunc("POST /api/checkout", s.handleCheckout)
 	mux.HandleFunc("GET /api/orders/{reference}", s.handleGetOrder)
 

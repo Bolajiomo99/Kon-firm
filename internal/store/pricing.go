@@ -192,3 +192,33 @@ func (s *Store) RedeemVoucher(ctx context.Context, code string) error {
 		WHERE code = $1 AND (max_uses IS NULL OR times_used < max_uses)`, code)
 	return err
 }
+
+// PriceBasket returns the VAT-inclusive subtotal for a set of lines, priced
+// from the database.
+//
+// Separate from CreateOrder so a quote and a checkout compute the subtotal the
+// same way. If they used different code, the total shown to a shopper could
+// drift from the total they are charged — which is the one bug in a shop that
+// nobody forgives.
+func (s *Store) PriceBasket(ctx context.Context, lines []CreateOrderLine) (int64, error) {
+	if len(lines) == 0 {
+		return 0, fmt.Errorf("store: empty basket")
+	}
+	var subtotal int64
+	for _, l := range lines {
+		if l.Quantity <= 0 {
+			return 0, fmt.Errorf("store: quantity must be positive for product %d", l.ProductID)
+		}
+		var price int64
+		err := s.pool.QueryRow(ctx,
+			`SELECT price_kobo FROM products WHERE id = $1 AND active = TRUE`, l.ProductID).Scan(&price)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, fmt.Errorf("store: product %d: %w", l.ProductID, ErrNotFound)
+		}
+		if err != nil {
+			return 0, err
+		}
+		subtotal += price * int64(l.Quantity)
+	}
+	return subtotal, nil
+}

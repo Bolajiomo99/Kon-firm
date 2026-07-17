@@ -5,6 +5,7 @@
 // declares success on its own. It polls the server, which reports only what
 // the signature-verified webhook recorded.
 import { formatKobo, apiFetch } from './cart.js';
+import { mountFooter } from './footer.js';
 import { currentUser, renderNav } from './auth.js';
 import { connectLive } from './live.js';
 
@@ -171,3 +172,5 @@ async function boot() {
 window.addEventListener('pagehide', () => liveClose?.());
 
 boot();
+
+mountFooter();

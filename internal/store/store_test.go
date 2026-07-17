@@ -57,6 +57,22 @@ func seedProduct(t *testing.T, s *Store, stock int) int64 {
 	return id
 }
 
+// createTestOrder mirrors what the checkout handler does: price the basket,
+// build a quote, then create. Tests that skip the quote would not exercise the
+// price-change guard, which is the whole point of passing one in.
+func createTestOrder(t *testing.T, s *Store, ref, name, email, channel string, lines []CreateOrderLine) (*Order, error) {
+	t.Helper()
+	ctx := context.Background()
+	subtotal, err := s.PriceBasket(ctx, lines)
+	if err != nil {
+		return nil, err
+	}
+	q := BuildQuote(subtotal, 0, 0, "")
+	return s.CreateOrder(ctx, ref, name, email, channel, lines, q, Delivery{
+		Address: "12 Balogun Street", City: "Lagos Island", State: "Lagos",
+	})
+}
+
 func cleanupOrder(t *testing.T, s *Store, ref string) {
 	t.Helper()
 	t.Cleanup(func() {
@@ -68,13 +84,12 @@ func cleanupOrder(t *testing.T, s *Store, ref string) {
 
 func TestCreateOrder_PricesServerSide(t *testing.T) {
 	s := testStore(t)
-	ctx := context.Background()
 	pid := seedProduct(t, s, 10)
 
 	ref := fmt.Sprintf("KF-TEST-%d", time.Now().UnixNano())
 	cleanupOrder(t, s, ref)
 
-	o, err := s.CreateOrder(ctx, ref, "Ada Lovelace", "ada@example.com", "online",
+	o, err := createTestOrder(t, s, ref, "Ada Lovelace", "ada@example.com", "online",
 		[]CreateOrderLine{{ProductID: pid, Quantity: 3}})
 	if err != nil {
 		t.Fatalf("CreateOrder: %v", err)
@@ -91,13 +106,12 @@ func TestCreateOrder_PricesServerSide(t *testing.T) {
 
 func TestCreateOrder_RejectsOverStock(t *testing.T) {
 	s := testStore(t)
-	ctx := context.Background()
 	pid := seedProduct(t, s, 2)
 
 	ref := fmt.Sprintf("KF-TEST-%d", time.Now().UnixNano())
 	cleanupOrder(t, s, ref)
 
-	_, err := s.CreateOrder(ctx, ref, "Ada", "ada@example.com", "online",
+	_, err := createTestOrder(t, s, ref, "Ada", "ada@example.com", "online",
 		[]CreateOrderLine{{ProductID: pid, Quantity: 5}})
 	if err == nil {
 		t.Fatal("expected ordering 5 of a 2-stock item to fail")
@@ -106,7 +120,7 @@ func TestCreateOrder_RejectsOverStock(t *testing.T) {
 
 func TestCreateOrder_RejectsEmptyCart(t *testing.T) {
 	s := testStore(t)
-	_, err := s.CreateOrder(context.Background(), "KF-EMPTY", "A", "a@b.c", "online", nil)
+	_, err := s.CreateOrder(context.Background(), "KF-EMPTY", "A", "a@b.c", "online", nil, Quote{}, Delivery{})
 	if err == nil {
 		t.Fatal("expected empty cart to be rejected")
 	}
@@ -129,7 +143,7 @@ func TestApplyWebhook_IsIdempotent(t *testing.T) {
 	cleanupOrder(t, s, txRef)
 	cleanupOrder(t, s, ref)
 
-	if _, err := s.CreateOrder(ctx, ref, "Ada", "ada@example.com", "online",
+	if _, err := createTestOrder(t, s, ref, "Ada", "ada@example.com", "online",
 		[]CreateOrderLine{{ProductID: pid, Quantity: 2}}); err != nil {
 		t.Fatalf("CreateOrder: %v", err)
 	}
@@ -200,7 +214,7 @@ func TestApplyWebhook_ConcurrentReplays(t *testing.T) {
 	cleanupOrder(t, s, txRef)
 	cleanupOrder(t, s, ref)
 
-	if _, err := s.CreateOrder(ctx, ref, "Ada", "ada@example.com", "online",
+	if _, err := createTestOrder(t, s, ref, "Ada", "ada@example.com", "online",
 		[]CreateOrderLine{{ProductID: pid, Quantity: 3}}); err != nil {
 		t.Fatalf("CreateOrder: %v", err)
 	}
@@ -258,4 +272,39 @@ func currentStock(t *testing.T, s *Store, productID int64) int {
 		t.Fatalf("read stock: %v", err)
 	}
 	return stock
+}
+
+// TestCreateOrder_RefusesWhenPriceMoved covers the window between a shopper
+// being quoted and the order being written. Charging the new price bills them
+// for something they never agreed to; charging the old one sells at a price
+// the shop has withdrawn. Refusing is the only honest option.
+func TestCreateOrder_RefusesWhenPriceMoved(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	pid := seedProduct(t, s, 10)
+
+	ref := fmt.Sprintf("KF-TEST-PRICE-%d", time.Now().UnixNano())
+	cleanupOrder(t, s, ref)
+
+	lines := []CreateOrderLine{{ProductID: pid, Quantity: 1}}
+
+	// Quote at the current price.
+	subtotal, err := s.PriceBasket(ctx, lines)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staleQuote := BuildQuote(subtotal, 0, 0, "")
+
+	// The shop repricing the item mid-checkout.
+	if _, err := s.Pool().Exec(ctx,
+		`UPDATE products SET price_kobo = price_kobo + 100000 WHERE id = $1`, pid); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = s.CreateOrder(ctx, ref, "Ada", "ada@example.com", "online", lines, staleQuote, Delivery{
+		Address: "12 Balogun Street", State: "Lagos",
+	})
+	if !errors.Is(err, ErrPriceChanged) {
+		t.Fatalf("CreateOrder error = %v, want ErrPriceChanged — a stale quote must not be honoured", err)
+	}
 }

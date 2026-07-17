@@ -23,6 +23,12 @@ var ErrAlreadyProcessed = errors.New("store: webhook event already processed")
 // ErrNotFound is returned when a lookup matches no row.
 var ErrNotFound = errors.New("store: not found")
 
+// ErrPriceChanged means a product's price moved between the shopper being
+// quoted and the order being created. Refusing is the only honest option:
+// charging the new price bills them for something they never agreed to, and
+// charging the old one sells at a price the shop has withdrawn.
+var ErrPriceChanged = errors.New("store: price changed during checkout")
+
 type Store struct{ pool *pgxpool.Pool }
 
 func New(ctx context.Context, databaseURL string) (*Store, error) {
@@ -74,6 +80,7 @@ type OrderItem struct {
 }
 
 type Order struct {
+	Quote          Quote       `json:"quote"`
 	ID             int64       `json:"id"`
 	Reference      string      `json:"reference"`
 	TransactionRef string      `json:"transactionRef,omitempty"`
@@ -88,6 +95,11 @@ type Order struct {
 	CreatedAt      time.Time   `json:"createdAt"`
 	PaidAt         *time.Time  `json:"paidAt,omitempty"`
 	Items          []OrderItem `json:"items,omitempty"`
+
+	DeliveryAddress string `json:"deliveryAddress,omitempty"`
+	DeliveryCity    string `json:"deliveryCity,omitempty"`
+	DeliveryState   string `json:"deliveryState,omitempty"`
+	DeliveryPhone   string `json:"deliveryPhone,omitempty"`
 }
 
 func (s *Store) ListProducts(ctx context.Context) ([]Product, error) {
@@ -139,12 +151,30 @@ type CreateOrderLine struct {
 	Quantity  int
 }
 
+// Delivery is where an online order is going.
+type Delivery struct {
+	Phone   string
+	Address string
+	City    string
+	State   string
+	Lat     *float64
+	Lng     *float64
+}
+
 // CreateOrder prices a cart server-side and persists it as a pending order.
 //
 // Prices are read from the database inside the transaction; the client sends
 // only product IDs and quantities. A browser that posts its own prices must
 // never be believed, or a hostile cart pays ₦1 for a ₦100,000 item.
-func (s *Store) CreateOrder(ctx context.Context, ref, name, email, channel string, lines []CreateOrderLine) (*Order, error) {
+//
+// quote carries the figures the caller already computed — discount, delivery,
+// VAT — and they are frozen onto the order. The line prices are re-read here
+// under FOR UPDATE regardless, and the resulting subtotal is checked against
+// the quote: if they disagree, a price moved between quoting and paying, and
+// the order is refused rather than charged at a figure nobody agreed to.
+func (s *Store) CreateOrder(ctx context.Context, ref, name, email, channel string,
+	lines []CreateOrderLine, quote Quote, del Delivery) (*Order, error) {
+
 	if len(lines) == 0 {
 		return nil, fmt.Errorf("store: cannot create an empty order")
 	}
@@ -186,16 +216,30 @@ func (s *Store) CreateOrder(ctx context.Context, ref, name, email, channel strin
 		})
 	}
 
+	// The subtotal just recomputed under FOR UPDATE must match what the
+	// shopper was quoted. A mismatch means a price changed underneath them.
+	if total != quote.SubtotalKobo {
+		return nil, fmt.Errorf("%w: a price changed while you were checking out — please review your basket", ErrPriceChanged)
+	}
+
 	var o Order
 	err = tx.QueryRow(ctx, `
-		INSERT INTO orders (reference, customer_name, customer_email, total_kobo, channel)
-		VALUES ($1,$2,$3,$4,$5)
+		INSERT INTO orders (
+			reference, customer_name, customer_email, total_kobo, channel,
+			subtotal_kobo, discount_kobo, delivery_fee_kobo, vat_kobo, vat_rate_bp, voucher_code,
+			delivery_name, delivery_phone, delivery_address, delivery_city, delivery_state,
+			delivery_lat, delivery_lng
+		)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
 		RETURNING id, reference, customer_name, customer_email, total_kobo, status::text, channel::text, created_at`,
-		ref, name, email, total, channel).
+		ref, name, email, quote.TotalKobo, channel,
+		quote.SubtotalKobo, quote.DiscountKobo, quote.DeliveryFeeKobo, quote.VATKobo, quote.VATRateBP, quote.VoucherCode,
+		name, del.Phone, del.Address, del.City, del.State, del.Lat, del.Lng).
 		Scan(&o.ID, &o.Reference, &o.CustomerName, &o.CustomerEmail, &o.TotalKobo, &o.Status, &o.Channel, &o.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("store: insert order: %w", err)
 	}
+	o.Quote = quote
 
 	for _, it := range items {
 		if _, err := tx.Exec(ctx, `
@@ -333,17 +377,27 @@ func (s *Store) OrderByReference(ctx context.Context, ref string) (*Order, error
 	err := s.pool.QueryRow(ctx, `
 		SELECT id, reference, COALESCE(transaction_ref,''), customer_name, customer_email,
 		       total_kobo, status::text, channel::text, checkout_url, amount_paid_kobo,
-		       payment_method, created_at, paid_at
+		       payment_method, created_at, paid_at,
+		       subtotal_kobo, discount_kobo, delivery_fee_kobo, vat_kobo, vat_rate_bp, voucher_code,
+		       delivery_address, delivery_city, delivery_state, delivery_phone
 		FROM orders WHERE reference = $1`, ref).
 		Scan(&o.ID, &o.Reference, &o.TransactionRef, &o.CustomerName, &o.CustomerEmail,
 			&o.TotalKobo, &o.Status, &o.Channel, &o.CheckoutURL, &o.AmountPaidKobo,
-			&o.PaymentMethod, &o.CreatedAt, &o.PaidAt)
+			&o.PaymentMethod, &o.CreatedAt, &o.PaidAt,
+			&o.Quote.SubtotalKobo, &o.Quote.DiscountKobo, &o.Quote.DeliveryFeeKobo,
+			&o.Quote.VATKobo, &o.Quote.VATRateBP, &o.Quote.VoucherCode,
+			&o.DeliveryAddress, &o.DeliveryCity, &o.DeliveryState, &o.DeliveryPhone)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
+
+	// Derived, not stored: the total is the order's own figure, and free
+	// delivery is simply a zero fee.
+	o.Quote.TotalKobo = o.TotalKobo
+	o.Quote.FreeDelivery = o.Quote.DeliveryFeeKobo == 0
 
 	rows, err := s.pool.Query(ctx, `
 		SELECT product_id, product_name, quantity, unit_price_kobo

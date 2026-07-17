@@ -1,4 +1,5 @@
 import { apiFetch, toast } from './cart.js';
+import { mountFooter } from './footer.js';
 
 const form = document.getElementById('form');
 const errorBox = document.getElementById('error');
@@ -8,10 +9,16 @@ const submit = document.getElementById('submit');
 // absolute URL here would make this an open redirect: a link to
 // /login?next=https://evil.example would bounce a freshly-signed-in user
 // straight off the site.
+// Only same-origin paths are honoured. An absolute URL here would make
+// /login?next=https://evil.example an open redirect that bounces a
+// freshly-signed-in user off the site.
+//
+// The default lands on the catalogue rather than the hero: someone who just
+// signed in came to shop, not to read the pitch again.
 function safeNext() {
   const raw = new URLSearchParams(window.location.search).get('next');
-  if (!raw) return '/';
-  if (!raw.startsWith('/') || raw.startsWith('//')) return '/';
+  if (!raw) return '/#catalogue';
+  if (!raw.startsWith('/') || raw.startsWith('//')) return '/#catalogue';
   return raw;
 }
 
@@ -32,7 +39,9 @@ form.addEventListener('submit', async (e) => {
     });
     toast(`Welcome back, ${user.name.split(' ')[0]}`);
     const next = safeNext();
-    window.location.href = user.role === 'admin' && next === '/' ? '/admin' : next;
+    // Staff land on the dashboard; shoppers land on the products.
+    window.location.href =
+      user.role === 'admin' && next === '/#catalogue' ? '/admin' : next;
   } catch (err) {
     errorBox.textContent = err.message;
     errorBox.hidden = false;
@@ -41,3 +50,5 @@ form.addEventListener('submit', async (e) => {
     document.getElementById('password').value = '';
   }
 });
+
+mountFooter();

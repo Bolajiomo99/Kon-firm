@@ -1,4 +1,5 @@
 import { formatKobo, apiFetch } from './cart.js';
+import { mountFooter } from './footer.js';
 import { currentUser, renderNav, requireLogin } from './auth.js';
 
 function badge(kind) {
@@ -65,3 +66,5 @@ async function load() {
 }
 
 load();
+
+mountFooter();

@@ -118,21 +118,74 @@
   <div class="cart-items" id="cart-items"></div>
   <div class="cart-foot">
     <div class="error-box" id="checkout-error" hidden role="alert"></div>
-    <div class="total-row">
-      <span>Total</span>
-      <span class="amount" id="cart-total">₦0.00</span>
-    </div>
+
     <form id="checkout-form" novalidate>
-      <div class="field">
-        <label for="name">Full name</label>
-        <input id="name" name="name" autocomplete="name" required placeholder="Zainab Wahab">
+      <!-- Shown only to guests; a signed-in shopper has already told us. -->
+      <div id="guest-fields" hidden>
+        <div class="field">
+          <label for="name">Full name</label>
+          <input id="name" name="name" autocomplete="name" placeholder="Zainab Wahab">
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com">
+          <p class="hint">Your receipt goes here.</p>
+        </div>
       </div>
-      <div class="field">
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
-        <p class="hint">Your receipt goes here.</p>
+
+      <div id="signed-in-as" class="signed-as" hidden></div>
+
+      <fieldset class="fieldset">
+        <legend>Delivery</legend>
+        <div class="field">
+          <label for="d-address">Address</label>
+          <input id="d-address" autocomplete="street-address" placeholder="12 Balogun Street, Off Broad Street">
+        </div>
+        <div class="two-up">
+          <div class="field">
+            <label for="d-city">City / area</label>
+            <input id="d-city" autocomplete="address-level2" placeholder="Lagos Island">
+          </div>
+          <div class="field">
+            <label for="d-state">State</label>
+            <select id="d-state" autocomplete="address-level1"></select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="d-phone">Phone for the rider</label>
+          <input id="d-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="0803 123 4567">
+        </div>
+        <button class="btn btn-sm btn-secondary btn-block" id="geo-btn" type="button">
+          📍 Use my current location
+        </button>
+        <p class="hint" id="geo-hint"></p>
+      </fieldset>
+
+      <fieldset class="fieldset">
+        <legend>Voucher</legend>
+        <div class="voucher-row">
+          <div class="field" style="flex:1;margin:0">
+            <label for="voucher" class="sr-only">Voucher code</label>
+            <input id="voucher" autocomplete="off" placeholder="Enter code" style="text-transform:uppercase">
+          </div>
+          <button class="btn btn-secondary" id="voucher-btn" type="button">Apply</button>
+        </div>
+        <p class="hint" id="voucher-hint">Try WELCOME10 — 10% off orders over ₦20,000.</p>
+      </fieldset>
+
+      <!-- Every figure below comes from the server, so the number here is the
+           number Monnify charges. -->
+      <div class="totals" id="totals">
+        <div class="totals-row"><span>Subtotal</span><span id="t-subtotal">₦0.00</span></div>
+        <div class="totals-row" id="t-discount-row" hidden>
+          <span id="t-discount-label">Discount</span><span id="t-discount">₦0.00</span>
+        </div>
+        <div class="totals-row"><span>Delivery</span><span id="t-delivery">—</span></div>
+        <div class="totals-row grand"><span>Total</span><span class="amount" id="cart-total">₦0.00</span></div>
+        <p class="vat-note" id="t-vat">Includes VAT</p>
       </div>
-      <button class="btn btn-block btn-lg" id="checkout-btn" type="submit">Pay with Monnify</button>
+
+      <button class="btn btn-block btn-lg" id="checkout-btn" type="submit">Checkout</button>
     </form>
     <p class="hint" style="text-align:center;margin-top:10px">
       🔒 Card details never touch our servers.
@@ -140,48 +193,7 @@
   </div>
 </aside>
 
-<footer class="site-footer">
-  <div class="wrap">
-    <div class="footer-grid">
-      <div>
-        <a class="brand" href="/" style="margin-bottom:14px">
-          <img class="logo-img" src="/img/logo-512.png" alt="" width="512" height="512" style="height:34px">
-          <span class="brand-text" style="font-size:1.05rem">Kon-firm</span>
-        </a>
-        <p class="footer-blurb">
-          Fashion, gadgets and everyday essentials — sold online and across the
-          counter, from one inventory. Every naira confirmed before dispatch.
-        </p>
-      </div>
-      <div>
-        <h4>Shop</h4>
-        <ul>
-          <li><a href="/#catalogue">All products</a></li>
-          <li><a href="/orders">My orders</a></li>
-          <li><a href="/signup">Create account</a></li>
-        </ul>
-      </div>
-      <div>
-        <h4>Account</h4>
-        <ul>
-          <li><a href="/login">Sign in</a></li>
-          <li><a href="/orders">Track an order</a></li>
-        </ul>
-      </div>
-      <div>
-        <h4>Built with</h4>
-        <ul>
-          <li><a href="https://developers.monnify.com/">Monnify API</a></li>
-          <li><a href="https://github.com/Bolajiomo99/Kon-firm">Source code</a></li>
-        </ul>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      <span>© 2026 Kon-firm · Lagos, Nigeria</span>
-      <span class="pay-mark">🔒 Payments secured by Monnify</span>
-    </div>
-  </div>
-</footer>
+<footer class="site-footer"></footer>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="/js/store.js" type="module"></script>

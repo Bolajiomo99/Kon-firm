@@ -34,13 +34,24 @@ type checkoutRequest struct {
 	CustomerEmail string         `json:"customerEmail"`
 	Channel       string         `json:"channel"` // "online" | "pos"
 	Items         []checkoutLine `json:"items"`
+	VoucherCode   string         `json:"voucherCode"`
+
+	// Delivery. Required for online orders; a POS sale is handed over the
+	// counter, so there is nothing to deliver.
+	DeliveryPhone   string   `json:"deliveryPhone"`
+	DeliveryAddress string   `json:"deliveryAddress"`
+	DeliveryCity    string   `json:"deliveryCity"`
+	DeliveryState   string   `json:"deliveryState"`
+	DeliveryLat     *float64 `json:"deliveryLat"`
+	DeliveryLng     *float64 `json:"deliveryLng"`
 }
 
 type checkoutResponse struct {
-	Reference   string `json:"reference"`
-	CheckoutURL string `json:"checkoutUrl"`
-	TotalKobo   int64  `json:"totalKobo"`
-	TotalNaira  string `json:"totalNaira"`
+	Reference   string      `json:"reference"`
+	CheckoutURL string      `json:"checkoutUrl"`
+	TotalKobo   int64       `json:"totalKobo"`
+	TotalNaira  string      `json:"totalNaira"`
+	Quote       store.Quote `json:"quote"`
 }
 
 // newReference mints a unique paymentReference. Monnify rejects a reused one,
@@ -85,6 +96,21 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		req.Channel = "online"
 	}
 
+	// An online order has to go somewhere. A POS sale does not.
+	if req.Channel != "pos" {
+		req.DeliveryAddress = strings.TrimSpace(req.DeliveryAddress)
+		req.DeliveryCity = strings.TrimSpace(req.DeliveryCity)
+		req.DeliveryState = strings.TrimSpace(req.DeliveryState)
+		if req.DeliveryAddress == "" {
+			writeError(w, http.StatusBadRequest, "a delivery address is required")
+			return
+		}
+		if req.DeliveryState == "" {
+			writeError(w, http.StatusBadRequest, "please choose your state")
+			return
+		}
+	}
+
 	lines := make([]store.CreateOrderLine, 0, len(req.Items))
 	for _, it := range req.Items {
 		lines = append(lines, store.CreateOrderLine{ProductID: it.ProductID, Quantity: it.Quantity})
@@ -111,8 +137,45 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Price the cart server-side. This is also where stock is validated.
-	order, err := s.store.CreateOrder(r.Context(), ref, req.CustomerName, req.CustomerEmail, req.Channel, lines)
+	// Price the basket server-side, through the same path the quote endpoint
+	// uses, so the total shown can never drift from the total charged.
+	subtotal, err := s.store.PriceBasket(r.Context(), lines)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusBadRequest, "one or more products are unavailable")
+			return
+		}
+		s.log.Error("checkout: price basket", "err", err)
+		writeError(w, http.StatusInternalServerError, "could not price your basket")
+		return
+	}
+
+	// The voucher is re-validated here, never trusted from the request. A
+	// browser that could name its own discount could name any discount.
+	var discount int64
+	var voucherCode string
+	if c := strings.TrimSpace(req.VoucherCode); c != "" {
+		v, verr := s.store.VoucherByCode(r.Context(), c, subtotal)
+		if verr == nil {
+			discount = v.DiscountFor(subtotal)
+			voucherCode = v.Code
+		}
+		// A code that has expired between quoting and paying is simply not
+		// applied. Failing the checkout over it would lose the sale.
+	}
+
+	fee := store.DeliveryFee(subtotal-discount, req.DeliveryState)
+	if req.Channel == "pos" {
+		fee = 0 // handed over the counter
+	}
+	quote := store.BuildQuote(subtotal, discount, fee, voucherCode)
+
+	order, err := s.store.CreateOrder(r.Context(), ref, req.CustomerName, req.CustomerEmail, req.Channel,
+		lines, quote, store.Delivery{
+			Phone: req.DeliveryPhone, Address: req.DeliveryAddress,
+			City: req.DeliveryCity, State: req.DeliveryState,
+			Lat: req.DeliveryLat, Lng: req.DeliveryLng,
+		})
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusBadRequest, "one or more products are unavailable")
@@ -159,6 +222,14 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Count the redemption once the order exists. Doing it at quote time would
+	// burn a limited code every time someone typed it to look.
+	if voucherCode != "" {
+		if err := s.store.RedeemVoucher(r.Context(), voucherCode); err != nil {
+			s.log.Error("redeem voucher", "err", err, "code", voucherCode)
+		}
+	}
+
 	// A new order is dashboard news even before it is paid.
 	s.events.Publish(events.TopicAdmin, events.Event{
 		Type: events.TypeOrderCreated, Ref: order.Reference, Data: order,
@@ -169,6 +240,7 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		CheckoutURL: init.CheckoutURL,
 		TotalKobo:   order.TotalKobo,
 		TotalNaira:  koboToNaira(order.TotalKobo),
+		Quote:       quote,
 	})
 }
 

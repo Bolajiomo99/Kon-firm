@@ -77,8 +77,8 @@ export function renderNav(user, container) {
   menu.append(head);
 
   const links = user.role === 'admin'
-    ? [['Dashboard', '/admin'], ['Point of sale', '/pos'], ['Store', '/']]
-    : [['My orders', '/orders'], ['Continue shopping', '/']];
+    ? [['Dashboard', '/admin'], ['Point of sale', '/pos'], ['Store', '/#catalogue']]
+    : [['My orders', '/orders']];
 
   for (const [label, href] of links) {
     const a = document.createElement('a');

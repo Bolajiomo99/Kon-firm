@@ -2,6 +2,8 @@
 import { Cart, formatKobo, toast, apiFetch } from './cart.js';
 import { currentUser, renderNav } from './auth.js';
 import { connectLive } from './live.js';
+import { buildStateSelect, fetchQuote, renderTotals, useMyLocation } from './checkout.js';
+import { mountFooter } from './footer.js';
 
 const cart = new Cart();
 const $ = (id) => document.getElementById(id);
@@ -30,7 +32,66 @@ const el = {
   checkoutError: $('checkout-error'),
   slides: $('slides'),
   dots: $('slide-dots'),
+  guestFields: $('guest-fields'),
+  signedInAs: $('signed-in-as'),
+  dAddress: $('d-address'),
+  dCity: $('d-city'),
+  dState: $('d-state'),
+  dPhone: $('d-phone'),
+  geoBtn: $('geo-btn'),
+  geoHint: $('geo-hint'),
+  voucher: $('voucher'),
+  voucherBtn: $('voucher-btn'),
+  voucherHint: $('voucher-hint'),
+  totals: {
+    subtotal: $('t-subtotal'),
+    discountRow: $('t-discount-row'),
+    discountLabel: $('t-discount-label'),
+    discount: $('t-discount'),
+    delivery: $('t-delivery'),
+    total: $('cart-total'),
+    vat: $('t-vat'),
+  },
 };
+
+let coords = { lat: null, lng: null };
+let appliedVoucher = '';
+let quoteTimer = null;
+
+// Re-quote whenever anything that affects the price changes. Debounced: a
+// keystroke in the state box should not fire a request per character.
+function scheduleQuote() {
+  clearTimeout(quoteTimer);
+  quoteTimer = setTimeout(refreshQuote, 250);
+}
+
+async function refreshQuote() {
+  if (cart.isEmpty) {
+    renderTotals(
+      { subtotalKobo: 0, discountKobo: 0, deliveryFeeKobo: 0, totalKobo: 0, vatKobo: 0, vatRateBp: 750, freeDelivery: false },
+      el.totals
+    );
+    el.totals.delivery.textContent = '—';
+    el.totals.vat.textContent = 'Includes VAT';
+    return;
+  }
+
+  const q = await fetchQuote(cart.toItems(), appliedVoucher, el.dState.value);
+  if (!q) return;
+
+  // The server is the authority on whether a code applies. If it rejected one,
+  // stop claiming it is applied.
+  if (q.voucherError) {
+    el.voucherHint.textContent = q.voucherError;
+    el.voucherHint.style.color = 'var(--red-600)';
+    appliedVoucher = '';
+  } else if (q.voucherCode) {
+    el.voucherHint.textContent = `${q.voucherCode} applied — ${formatKobo(q.discountKobo)} off.`;
+    el.voucherHint.style.color = 'var(--green-600)';
+  }
+
+  renderTotals(q, el.totals);
+}
 
 /* ---------- Carousel ---------- */
 
@@ -383,8 +444,8 @@ function onEsc(e) {
 function renderCart() {
   el.cartCount.textContent = String(cart.count);
   el.cartCount.hidden = cart.count === 0;
-  el.cartTotal.textContent = formatKobo(cart.totalKobo);
   el.checkoutBtn.disabled = cart.isEmpty;
+  scheduleQuote();
 
   el.cartItems.innerHTML = '';
   if (cart.isEmpty) {
@@ -450,12 +511,14 @@ el.form.addEventListener('submit', async (e) => {
   e.preventDefault();
   el.checkoutError.hidden = true;
 
-  const name = $('name').value.trim();
-  const email = $('email').value.trim();
+  const name = user ? user.name : $('name').value.trim();
+  const email = user ? (user.email || $('email').value.trim()) : $('email').value.trim();
 
   if (!name) return showCheckoutError('Please enter your name.');
   if (!email.includes('@')) return showCheckoutError('Please enter a valid email address.');
   if (cart.isEmpty) return showCheckoutError('Your bag is empty.');
+  if (!el.dAddress.value.trim()) return showCheckoutError('Please enter a delivery address.');
+  if (!el.dState.value) return showCheckoutError('Please choose your state.');
 
   el.checkoutBtn.disabled = true;
   el.checkoutBtn.textContent = 'Contacting Monnify…';
@@ -469,6 +532,13 @@ el.form.addEventListener('submit', async (e) => {
         customerEmail: email,
         channel: 'online',
         items: cart.toItems(),
+        voucherCode: appliedVoucher,
+        deliveryPhone: el.dPhone.value.trim(),
+        deliveryAddress: el.dAddress.value.trim(),
+        deliveryCity: el.dCity.value.trim(),
+        deliveryState: el.dState.value,
+        deliveryLat: coords.lat,
+        deliveryLng: coords.lng,
       }),
     });
 
@@ -506,14 +576,50 @@ el.backdrop.addEventListener('click', closeCart);
 cart.onChange(renderCart);
 
 async function boot() {
+  mountFooter();
   user = await currentUser();
   renderNav(user, $('account-nav'));
 
-  // Prefill checkout for a signed-in shopper: they have already told us this.
+  buildStateSelect(el.dState);
+
+  // A signed-in shopper has already told us who they are; asking again is
+  // friction for no information.
   if (user) {
-    if ($('name') && !$('name').value) $('name').value = user.name;
-    if ($('email') && !$('email').value) $('email').value = user.email || '';
+    el.guestFields.hidden = true;
+    el.signedInAs.hidden = false;
+    el.signedInAs.innerHTML = '';
+    const av = document.createElement('span');
+    av.className = 'avatar';
+    av.textContent = (user.name.split(' ').map(p => p[0]).slice(0,2).join('') || '?').toUpperCase();
+    const info = document.createElement('div');
+    const nm = document.createElement('strong');
+    nm.textContent = user.name;
+    const sub = document.createElement('span');
+    sub.textContent = user.email || user.phonePretty || '';
+    info.append(nm, sub);
+    el.signedInAs.append(av, info);
+    if (user.phone && !el.dPhone.value) el.dPhone.value = user.phonePretty || user.phone;
+  } else {
+    el.guestFields.hidden = false;
+    el.signedInAs.hidden = true;
   }
+
+  el.dState.addEventListener('change', scheduleQuote);
+  el.geoBtn.addEventListener('click', () =>
+    useMyLocation(el.geoHint, (lat, lng) => { coords = { lat, lng }; })
+  );
+  el.voucherBtn.addEventListener('click', () => {
+    appliedVoucher = el.voucher.value.trim().toUpperCase();
+    if (!appliedVoucher) {
+      el.voucherHint.textContent = 'Enter a code first.';
+      el.voucherHint.style.color = '';
+      return;
+    }
+    refreshQuote();
+  });
+  el.voucher.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); el.voucherBtn.click(); }
+  });
 
   buildCarousel();
   renderCart();

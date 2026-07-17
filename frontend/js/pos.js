@@ -6,6 +6,7 @@
 // always available and is not a second-class path: a real counter needs a way
 // to key in a code when a label is scuffed.
 import { Cart, formatKobo, toast, apiFetch } from './cart.js';
+import { mountFooter } from './footer.js';
 import { currentUser, renderNav } from './auth.js';
 
 const cart = new Cart('konfirm.pos.v1');
@@ -313,3 +314,5 @@ async function boot() {
 }
 
 boot();
+
+mountFooter();

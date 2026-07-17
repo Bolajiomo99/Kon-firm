@@ -1,13 +1,15 @@
 import { apiFetch, toast } from './cart.js';
+import { mountFooter } from './footer.js';
 
 const form = document.getElementById('form');
 const errorBox = document.getElementById('error');
 const submit = document.getElementById('submit');
 
+// Same-origin only; a new account lands on the catalogue, not the hero.
 function safeNext() {
   const raw = new URLSearchParams(window.location.search).get('next');
-  if (!raw) return '/';
-  if (!raw.startsWith('/') || raw.startsWith('//')) return '/';
+  if (!raw) return '/#catalogue';
+  if (!raw.startsWith('/') || raw.startsWith('//')) return '/#catalogue';
   return raw;
 }
 
@@ -37,3 +39,5 @@ form.addEventListener('submit', async (e) => {
     submit.textContent = 'Create account';
   }
 });
+
+mountFooter();

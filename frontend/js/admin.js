@@ -1,5 +1,6 @@
 // Admin dashboard: revenue, orders across both channels, and live inventory.
 import { formatKobo, apiFetch, toast } from './cart.js';
+import { mountFooter } from './footer.js';
 import { currentUser, renderNav } from './auth.js';
 import { connectLive, liveIndicator } from './live.js';
 
@@ -272,3 +273,5 @@ async function boot() {
 }
 
 boot();
+
+mountFooter();
