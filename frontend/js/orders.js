@@ -1,7 +1,7 @@
 import { formatKobo, apiFetch } from './cart.js';
 import { renderThemeToggle } from './theme.js';
 import { mountFooter } from './footer.js';
-import { currentUser, renderNav, requireLogin } from './auth.js';
+import { currentUser, renderNav } from './auth.js';
 
 function badge(kind) {
   const b = document.createElement('span');
@@ -152,11 +152,54 @@ function renderOrders(orders) {
   }
 }
 
+// A signed-out visitor here almost certainly just checked out as a guest and
+// wants their order. They have NO account yet, so bouncing them to the sign-in
+// page is a dead end — the whole point is that they never registered. Offer to
+// create one first, with sign-in as the secondary path for a returning
+// customer. Either way they come back to /orders.
+function offerAccount() {
+  const list = document.getElementById('orders-list');
+  document.getElementById('order-stats').innerHTML = '';
+  list.innerHTML = '';
+
+  const box = document.createElement('div');
+  box.className = 'auth-card';
+  box.style.textAlign = 'center';
+
+  const h = document.createElement('h3');
+  h.textContent = 'Create an account to track your orders';
+
+  const p = document.createElement('p');
+  p.style.color = 'var(--text-muted)';
+  p.textContent =
+    'You checked out as a guest, so there is no account to sign in to yet. ' +
+    'Create one with your WhatsApp number and every order — including this one — appears here.';
+
+  const create = document.createElement('a');
+  create.className = 'btn btn-lg';
+  create.href = '/signup?next=/orders';
+  create.textContent = 'Create account';
+
+  const signin = document.createElement('a');
+  signin.className = 'btn btn-lg btn-secondary';
+  signin.href = '/login?next=/orders';
+  signin.textContent = 'I already have one';
+  signin.style.marginLeft = '10px';
+
+  const note = document.createElement('p');
+  note.style.cssText = 'font-size:.8rem;color:var(--text-muted);margin-top:16px';
+  note.textContent =
+    'Just paid and looking for your receipt? Check your email — we sent it there.';
+
+  box.append(h, p, create, signin, note);
+  list.append(box);
+}
+
 async function load() {
   renderThemeToggle(document.getElementById('theme-toggle'));
   const user = await currentUser();
   renderNav(user, document.getElementById('account-nav'));
-  if (!user) return requireLogin('/orders');
+  if (!user) return offerAccount();
 
   try {
     const orders = await apiFetch('/api/me/orders');
