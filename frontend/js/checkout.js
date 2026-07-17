@@ -77,32 +77,62 @@ export function renderTotals(q, els) {
 }
 
 /**
- * Fills the address from the device's location.
+ * Fills the delivery address from the device's location.
  *
- * Uses the browser's own Geolocation API rather than a maps SDK: no API key,
- * no billing account, no third-party script for the CSP to allow, and nothing
- * that can fail on stage. It captures coordinates for the dispatch rider —
- * it does not replace the written address, which a rider still needs.
+ * The browser's own Geolocation API gives coordinates; our server turns those
+ * into a street, city and state. The lookup is proxied rather than called from
+ * here because `connect-src 'self'` blocks a direct call, and widening the CSP
+ * to allow a geocoder would open the one door keeping third parties out of the
+ * page.
+ *
+ * The fields stay editable afterwards. Reverse geocoding lands on a street, not
+ * a gate — a rider still needs "third gate, blue building", and no geocoder
+ * knows that.
  */
-export function useMyLocation(hintEl, onCoords) {
+export function useMyLocation(hintEl, fields, onCoords) {
   if (!navigator.geolocation) {
-    hintEl.textContent = 'This browser cannot share a location. Please type the address.';
+    hintEl.textContent = 'This browser cannot share a location. Please type your address.';
     return;
   }
   hintEl.textContent = 'Finding you…';
+  hintEl.style.color = '';
 
   navigator.geolocation.getCurrentPosition(
-    (pos) => {
+    async (pos) => {
       const { latitude, longitude, accuracy } = pos.coords;
       onCoords(latitude, longitude);
-      hintEl.textContent =
-        `📍 Location saved for the rider (±${Math.round(accuracy)}m). Please still type your address.`;
+      hintEl.textContent = `📍 Found you (±${Math.round(accuracy)}m). Looking up the address…`;
+
+      try {
+        const res = await apiFetch(
+          `/api/geocode/reverse?lat=${latitude.toFixed(6)}&lng=${longitude.toFixed(6)}`
+        );
+
+        // Never overwrite something the shopper already typed — they know
+        // their address better than a geocoder does.
+        if (res.address && !fields.address.value.trim()) fields.address.value = res.address;
+        if (res.city && !fields.city.value.trim()) fields.city.value = res.city;
+        if (res.state) {
+          const opt = [...fields.state.options].find((o) => o.value === res.state);
+          if (opt) fields.state.value = res.state;
+        }
+        fields.state.dispatchEvent(new Event('change')); // delivery fee may change
+
+        hintEl.textContent = res.address
+          ? `📍 ${res.address}${res.city ? ', ' + res.city : ''} — please check and add your landmark.`
+          : '📍 Location saved. Please type your street address.';
+        hintEl.style.color = 'var(--green-600)';
+      } catch {
+        hintEl.textContent =
+          '📍 Location saved for the rider, but the address lookup failed — please type it.';
+      }
     },
     (err) => {
       hintEl.textContent =
         err.code === err.PERMISSION_DENIED
           ? 'Location permission denied — please type your address.'
           : 'Could not get your location — please type your address.';
+      hintEl.style.color = 'var(--red-600)';
     },
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
   );

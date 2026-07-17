@@ -608,7 +608,11 @@ async function boot() {
 
   el.dState.addEventListener('change', scheduleQuote);
   el.geoBtn.addEventListener('click', () =>
-    useMyLocation(el.geoHint, (lat, lng) => { coords = { lat, lng }; })
+    useMyLocation(
+      el.geoHint,
+      { address: el.dAddress, city: el.dCity, state: el.dState },
+      (lat, lng) => { coords = { lat, lng }; }
+    )
   );
   el.voucherBtn.addEventListener('click', () => {
     appliedVoucher = el.voucher.value.trim().toUpperCase();
