@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Bolajiomo99/Kon-firm/internal/config"
+	"github.com/Bolajiomo99/Kon-firm/internal/events"
 	"github.com/Bolajiomo99/Kon-firm/internal/monnify"
 	"github.com/Bolajiomo99/Kon-firm/internal/store"
 )
@@ -19,10 +20,11 @@ type Server struct {
 	store   *store.Store
 	monnify *monnify.Client
 	log     *slog.Logger
+	events  *events.Broker
 }
 
 func NewServer(cfg *config.Config, st *store.Store, mc *monnify.Client, log *slog.Logger) *Server {
-	return &Server{cfg: cfg, store: st, monnify: mc, log: log}
+	return &Server{cfg: cfg, store: st, monnify: mc, log: log, events: events.NewBroker()}
 }
 
 // writeJSON sends a JSON response. Errors sent to clients are deliberately
@@ -60,6 +62,7 @@ func (s *Server) Routes(frontend fs.FS) http.Handler {
 	mux.HandleFunc("POST /api/auth/login", s.handleLogin)
 	mux.HandleFunc("POST /api/auth/logout", s.handleLogout)
 	mux.HandleFunc("GET /api/auth/me", s.handleMe)
+	mux.HandleFunc("GET /api/stream", s.handleStream)
 	mux.HandleFunc("GET /api/me/orders", s.requireUser(s.handleMyOrders))
 
 	// Monnify calls this. It authenticates by signature, not by session.
@@ -119,6 +122,15 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 	})
 }
 
+// statusRecorder captures the response status for logging.
+//
+// Embedding http.ResponseWriter promotes its methods but NOT the optional
+// interfaces a concrete writer also satisfies: a type assertion against the
+// wrapper sees only what this struct declares. Without the Flush passthrough
+// below, wrapping a handler in this middleware silently disables streaming —
+// the SSE endpoint's w.(http.Flusher) check fails and every live update dies
+// with a 500. Any wrapper around a ResponseWriter has to forward the
+// interfaces it is standing in front of.
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
@@ -127,6 +139,14 @@ type statusRecorder struct {
 func (r *statusRecorder) WriteHeader(c int) {
 	r.status = c
 	r.ResponseWriter.WriteHeader(c)
+}
+
+// Flush forwards to the underlying writer so Server-Sent Events still work
+// through this middleware.
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

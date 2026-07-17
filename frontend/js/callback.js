@@ -5,6 +5,8 @@
 // declares success on its own. It polls the server, which reports only what
 // the signature-verified webhook recorded.
 import { formatKobo, apiFetch } from './cart.js';
+import { currentUser, renderNav } from './auth.js';
+import { connectLive } from './live.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -93,9 +95,13 @@ function renderReceipt(order) {
 }
 
 // Settlement is asynchronous: the customer can land here before Monnify's
-// webhook arrives. Poll with a bounded budget rather than guessing a status.
-const POLL_MS = 2000;
-const MAX_ATTEMPTS = 15; // ~30 seconds
+// webhook arrives.
+//
+// The live stream is the fast path — the page flips the instant the server
+// settles the order. Polling stays as a backstop, because a customer sitting
+// on a dead stream must still see their payment confirm.
+const POLL_MS = 3000;
+const MAX_ATTEMPTS = 12;
 
 async function poll(attempt = 0) {
   if (!ref) {
@@ -115,10 +121,17 @@ async function poll(attempt = 0) {
 
   if (order.status === 'paid') {
     setState('Payment confirmed', 'Monnify confirmed this payment and the order is settled.', 'paid');
+    liveClose?.();
+    return;
+  }
+  if (order.status === 'refunded') {
+    setState('Refunded', 'This order was refunded. The money is on its way back to you.', 'refunded');
+    liveClose?.();
     return;
   }
   if (order.status === 'failed' || order.status === 'expired') {
     setState('Payment not completed', 'This transaction did not succeed. Nothing was charged.', order.status);
+    liveClose?.();
     return;
   }
 
@@ -135,4 +148,26 @@ async function poll(attempt = 0) {
   setTimeout(() => poll(attempt + 1), POLL_MS);
 }
 
-poll();
+let liveClose = null;
+
+async function boot() {
+  renderNav(await currentUser(), document.getElementById('account-nav'));
+
+  if (ref) {
+    liveClose = connectLive({
+      order: ref,
+      onEvent: (ev) => {
+        if (ev.type === 'order.paid' || ev.type === 'order.failed') {
+          poll(); // re-read rather than trusting the frame
+        }
+      },
+    });
+  }
+
+  poll();
+}
+
+// Stop the stream once the outcome is known; there is nothing left to hear.
+window.addEventListener('pagehide', () => liveClose?.());
+
+boot();

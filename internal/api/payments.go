@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Bolajiomo99/Kon-firm/internal/auth"
+	"github.com/Bolajiomo99/Kon-firm/internal/events"
 	"github.com/Bolajiomo99/Kon-firm/internal/monnify"
 	"github.com/Bolajiomo99/Kon-firm/internal/store"
 )
@@ -158,6 +159,11 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// A new order is dashboard news even before it is paid.
+	s.events.Publish(events.TopicAdmin, events.Event{
+		Type: events.TypeOrderCreated, Ref: order.Reference, Data: order,
+	})
+
 	writeJSON(w, http.StatusOK, checkoutResponse{
 		Reference:   order.Reference,
 		CheckoutURL: init.CheckoutURL,
@@ -271,6 +277,15 @@ func (s *Server) handleMonnifyWebhook(w http.ResponseWriter, r *http.Request) {
 
 	s.log.Info("order settled", "ref", order.Reference, "status", order.Status,
 		"amount_kobo", order.TotalKobo, "method", order.PaymentMethod)
+
+	// Push to any open dashboard and to the customer's receipt page, so both
+	// update without a refresh.
+	evType := events.TypeOrderPaid
+	if order.Status != "paid" {
+		evType = events.TypeOrderFailed
+	}
+	s.events.PublishOrder(evType, order.Reference, order)
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "processed"})
 }
 
@@ -368,6 +383,7 @@ func (s *Server) reconcile(ctx context.Context, order *store.Order) *store.Order
 
 	s.log.Info("order settled by reconciliation — no usable webhook arrived",
 		"ref", settled.Reference, "amount_kobo", paidKobo)
+	s.events.PublishOrder(events.TypeOrderPaid, settled.Reference, settled)
 	return settled
 }
 

@@ -1,6 +1,7 @@
 // Admin dashboard: revenue, orders across both channels, and live inventory.
 import { formatKobo, apiFetch, toast } from './cart.js';
 import { currentUser, renderNav } from './auth.js';
+import { connectLive, liveIndicator } from './live.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -255,7 +256,19 @@ async function boot() {
     return;
   }
   $('refresh').addEventListener('click', load);
-  load();
+  await load();
+
+  // Live updates. Each event is a nudge to re-read, not the data itself:
+  // reloading is cheap and keeps one code path for rendering, so the screen
+  // cannot drift from the database because of a missed frame.
+  connectLive({
+    onEvent: (ev) => {
+      load();
+      if (ev.type === 'order.paid') toast('Payment confirmed — a new order just settled');
+      if (ev.type === 'refund.completed') toast('A refund completed');
+    },
+    onStatus: (connected) => liveIndicator($('live-status'), connected),
+  });
 }
 
 boot();

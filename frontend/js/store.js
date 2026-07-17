@@ -1,5 +1,7 @@
 // Storefront: catalogue, cart panel, and checkout handoff to Monnify.
 import { Cart, formatKobo, toast, apiFetch } from './cart.js';
+import { currentUser, renderNav } from './auth.js';
+import { connectLive } from './live.js';
 
 const cart = new Cart();
 let products = [];
@@ -244,5 +246,34 @@ el.closeBtn.addEventListener('click', closeCart);
 el.backdrop.addEventListener('click', closeCart);
 cart.onChange(renderCart);
 
-renderCart();
-loadProducts();
+async function boot() {
+  renderNav(await currentUser(), document.getElementById('account-nav'));
+  renderCart();
+  await loadProducts();
+
+  // Stock is shared with the shop counter, so it can change under a shopper's
+  // feet. Watching their own order also lets the store react the moment it
+  // settles.
+  const lastRef = safeSession('konfirm.lastRef');
+  if (lastRef) {
+    connectLive({
+      order: lastRef,
+      onEvent: (ev) => {
+        if (ev.type === 'order.paid') {
+          toast('Your payment was confirmed');
+          loadProducts();
+        }
+      },
+    });
+  }
+}
+
+function safeSession(key) {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+boot();

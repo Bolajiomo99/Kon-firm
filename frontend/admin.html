@@ -19,16 +19,14 @@
     </a>
     <nav class="nav-links" aria-label="Main">
       <a href="/">Store</a>
-      <a href="/pos">POS</a>
-      <a href="/admin" aria-current="page">Admin</a>
       <span id="account-nav" style="display:flex;gap:4px;align-items:center"></span>
     </nav>
   </div>
 </header>
 
-<main id="main" class="wrap" style="padding:32px 20px 0">
+<main id="main" class="wrap-wide" style="padding:32px 0 0">
   <div class="section-head">
-    <span class="eyebrow"><span class="dot" aria-hidden="true"></span> Live from Monnify</span>
+    <span class="eyebrow live-pill"><span class="dot" aria-hidden="true"></span><span id="live-status">Connecting…</span></span>
     <h1 style="font-size:clamp(1.7rem,4vw,2.4rem)">Admin</h1>
     <p>Both counters, one set of books. Revenue counts only orders that Monnify
        confirmed by webhook — a pending cart is intent, not income.</p>

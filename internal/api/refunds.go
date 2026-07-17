@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Bolajiomo99/Kon-firm/internal/events"
 	"github.com/Bolajiomo99/Kon-firm/internal/monnify"
 	"github.com/Bolajiomo99/Kon-firm/internal/store"
 )
@@ -131,6 +132,8 @@ func (s *Server) handleRefund(w http.ResponseWriter, r *http.Request) {
 		"order", orderRef, "refund", refundRef, "amount_kobo", amount,
 		"status", status, "by_admin", admin.ID)
 
+	s.events.PublishOrder(events.TypeRefundIssued, orderRef, settled)
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"refund":        settled,
 		"monnifyStatus": resp.RefundStatus,
@@ -187,5 +190,6 @@ func (s *Server) applyRefundEvent(w http.ResponseWriter, r *http.Request, event 
 	}
 
 	s.log.Info("refund settled by webhook", "ref", settled.Reference, "status", settled.Status)
+	s.events.PublishOrder(events.TypeRefundDone, settled.OrderRef, settled)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "processed"})
 }
