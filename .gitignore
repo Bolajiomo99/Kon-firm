@@ -30,5 +30,7 @@ dist/
 # Working notes, not part of the submission
 demo-script.md
 
-# Local editor/tooling config, not part of the project
-.claude/
+# Local editor and tooling config, not part of the project
+.*/launch.json
+.vscode/
+.idea/
