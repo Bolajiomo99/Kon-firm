@@ -169,6 +169,29 @@ func Load() (*Config, error) {
 	return c, nil
 }
 
+// EmailConfigured reports whether a receipt can actually be sent. All five
+// are needed: a host with no password is not a working mail server.
+func (c *Config) EmailConfigured() bool {
+	return len(c.MissingSMTP()) == 0
+}
+
+// MissingSMTP names the unset SMTP variables. Names only — never values.
+func (c *Config) MissingSMTP() []string {
+	var missing []string
+	for _, f := range []struct{ name, val string }{
+		{"SMTP_HOST", c.SMTPHost},
+		{"SMTP_PORT", c.SMTPPort},
+		{"SMTP_USERNAME", c.SMTPUsername},
+		{"SMTP_PASSWORD", c.SMTPPassword},
+		{"SMTP_FROM", c.SMTPFrom},
+	} {
+		if strings.TrimSpace(f.val) == "" {
+			missing = append(missing, f.name)
+		}
+	}
+	return missing
+}
+
 // Redacted returns a loggable summary. It never includes secret material.
 //
 // redirect_url is included deliberately: it is not a secret, it is where

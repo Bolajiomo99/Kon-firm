@@ -193,7 +193,13 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"env":          s.cfg.Env,
 		"monnifyBase":  s.cfg.MonnifyBaseURL,
 		"redirectUrl":  s.cfg.RedirectURL,
-		"receiptEmail": s.cfg.SMTPHost != "" && s.cfg.SMTPFrom != "",
+		"receiptEmail": s.cfg.EmailConfigured(),
+	}
+	// Name what is missing rather than just saying no. "false" sends someone
+	// hunting through a dashboard; a list of variable names does not. These
+	// are names, never values — the password is never reported.
+	if missing := s.cfg.MissingSMTP(); len(missing) > 0 {
+		body["receiptEmailMissing"] = missing
 	}
 	if problem := s.cfg.CheckRedirectURL(); problem != "" {
 		body["status"] = "degraded"
