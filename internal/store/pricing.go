@@ -126,7 +126,19 @@ func (v *Voucher) DiscountFor(subtotalKobo int64) int64 {
 	var d int64
 	switch v.Kind {
 	case "percent":
-		d = (subtotalKobo*v.Value + 5000) / 10000
+		if subtotalKobo <= 0 || v.Value <= 0 {
+			d = 0
+		break
+		}
+		// Percent vouchers are computed in basis points. Guard the multiply so a
+		// huge value cannot overflow and wrap to a negative discount before we
+		// clamp it to the basket.
+		raw := subtotalKobo * v.Value
+		if raw < 0 || raw/v.Value != subtotalKobo {
+			d = subtotalKobo
+			break
+		}
+		d = (raw + 5000) / 10000
 	case "fixed":
 		d = v.Value
 	}
