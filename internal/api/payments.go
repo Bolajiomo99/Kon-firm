@@ -9,10 +9,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Bolajiomo99/Kon-firm/internal/auth"
+	"github.com/Bolajiomo99/Kon-firm/internal/email"
 	"github.com/Bolajiomo99/Kon-firm/internal/events"
 	"github.com/Bolajiomo99/Kon-firm/internal/monnify"
 	"github.com/Bolajiomo99/Kon-firm/internal/store"
@@ -358,6 +361,10 @@ func (s *Server) handleMonnifyWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	s.events.PublishOrder(evType, order.Reference, order)
 
+	if order.Status == "paid" {
+		s.sendReceipt(r.Context(), order)
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "processed"})
 }
 
@@ -456,6 +463,7 @@ func (s *Server) reconcile(ctx context.Context, order *store.Order) *store.Order
 	s.log.Info("order settled by reconciliation — no usable webhook arrived",
 		"ref", settled.Reference, "amount_kobo", paidKobo)
 	s.events.PublishOrder(events.TypeOrderPaid, settled.Reference, settled)
+	s.sendReceipt(ctx, settled)
 	return settled
 }
 
@@ -481,4 +489,98 @@ func truncateBody(b []byte) string {
 		return string(b)
 	}
 	return string(b[:max]) + "...(truncated)"
+}
+
+// sendReceipt emails a confirmed order to its customer.
+//
+// Called from both settlement paths — the webhook and reconciliation — because
+// a customer who was confirmed by the fallback needs their receipt just as
+// much as one confirmed by a notification. Arguably more: the fallback exists
+// precisely because their browser never came back.
+//
+// Fire-and-forget by construction. The money has already moved; a mail server
+// is not permitted to fail a payment, so nothing here returns an error.
+func (s *Server) sendReceipt(ctx context.Context, order *store.Order) {
+	// Re-read for the line items and delivery address. Worth one query: a
+	// receipt without what was bought is not a receipt.
+	full, err := s.store.OrderByReference(ctx, order.Reference)
+	if err != nil {
+		s.log.Error("receipt: could not load order", "err", err, "ref", order.Reference)
+		return
+	}
+
+	lines := make([]email.ReceiptLine, 0, len(full.Items))
+	for _, it := range full.Items {
+		lines = append(lines, email.ReceiptLine{
+			Name:     it.ProductName,
+			Quantity: it.Quantity,
+			Amount:   naira(it.UnitPriceKobo * int64(it.Quantity)),
+		})
+	}
+
+	addr := strings.TrimSpace(strings.Join([]string{
+		full.DeliveryAddress, full.DeliveryCity, full.DeliveryState,
+	}, ", "))
+	addr = strings.Trim(addr, ", ")
+
+	q := full.Quote
+	r := email.Receipt{
+		CustomerName:  full.CustomerName,
+		Email:         full.CustomerEmail,
+		Reference:     full.Reference,
+		MonnifyRef:    full.TransactionRef,
+		PaymentMethod: prettyMethod(full.PaymentMethod),
+		Lines:         lines,
+		Subtotal:      naira(q.SubtotalKobo),
+		Delivery:      naira(q.DeliveryFeeKobo),
+		FreeDelivery:  q.DeliveryFeeKobo == 0,
+		Total:         naira(full.TotalKobo),
+		VAT:           naira(q.VATKobo),
+		VATRate:       fmt.Sprintf("%g%%", float64(q.VATRateBP)/100),
+		VoucherCode:   q.VoucherCode,
+		Address:       addr,
+	}
+	if q.DiscountKobo > 0 {
+		r.Discount = naira(q.DiscountKobo)
+	}
+	if full.PaidAt != nil {
+		r.PaidAt = *full.PaidAt
+	}
+	if s.cfg.PublicURL != "" {
+		r.ReceiptURL = s.cfg.PublicURL + "/payment/callback?paymentReference=" +
+			url.QueryEscape(full.Reference)
+	}
+
+	s.mail.SendReceipt(r)
+}
+
+// naira renders kobo for a human. Integer arithmetic with a thousands
+// separator; money never goes near a float on its way to a customer.
+func naira(kobo int64) string {
+	neg := kobo < 0
+	if neg {
+		kobo = -kobo
+	}
+	whole := strconv.FormatInt(kobo/100, 10)
+	var out []byte
+	for i, c := range []byte(whole) {
+		if i > 0 && (len(whole)-i)%3 == 0 {
+			out = append(out, ',')
+		}
+		out = append(out, c)
+	}
+	sign := ""
+	if neg {
+		sign = "-"
+	}
+	return fmt.Sprintf("%s₦%s.%02d", sign, out, kobo%100)
+}
+
+// prettyMethod turns ACCOUNT_TRANSFER into "Account transfer".
+func prettyMethod(m string) string {
+	if m == "" {
+		return ""
+	}
+	s := strings.ToLower(strings.ReplaceAll(m, "_", " "))
+	return strings.ToUpper(s[:1]) + s[1:]
 }

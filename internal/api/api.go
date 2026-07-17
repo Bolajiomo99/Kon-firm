@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Bolajiomo99/Kon-firm/internal/config"
+	"github.com/Bolajiomo99/Kon-firm/internal/email"
 	"github.com/Bolajiomo99/Kon-firm/internal/events"
 	"github.com/Bolajiomo99/Kon-firm/internal/monnify"
 	"github.com/Bolajiomo99/Kon-firm/internal/store"
@@ -21,10 +22,19 @@ type Server struct {
 	monnify *monnify.Client
 	log     *slog.Logger
 	events  *events.Broker
+	mail    *email.Sender
 }
 
 func NewServer(cfg *config.Config, st *store.Store, mc *monnify.Client, log *slog.Logger) *Server {
-	return &Server{cfg: cfg, store: st, monnify: mc, log: log, events: events.NewBroker()}
+	return &Server{
+		cfg: cfg, store: st, monnify: mc, log: log,
+		events: events.NewBroker(),
+		mail: email.New(email.Config{
+			Host: cfg.SMTPHost, Port: cfg.SMTPPort,
+			Username: cfg.SMTPUsername, Password: cfg.SMTPPassword,
+			From: cfg.SMTPFrom, BaseURL: cfg.PublicURL,
+		}, log),
+	}
 }
 
 // writeJSON sends a JSON response. Errors sent to clients are deliberately
@@ -179,10 +189,11 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	// browser follows it — and a wrong one is otherwise undiagnosable from
 	// outside: the payment succeeds and the shopper simply never comes back.
 	body := map[string]any{
-		"status":      "ok",
-		"env":         s.cfg.Env,
-		"monnifyBase": s.cfg.MonnifyBaseURL,
-		"redirectUrl": s.cfg.RedirectURL,
+		"status":       "ok",
+		"env":          s.cfg.Env,
+		"monnifyBase":  s.cfg.MonnifyBaseURL,
+		"redirectUrl":  s.cfg.RedirectURL,
+		"receiptEmail": s.cfg.SMTPHost != "" && s.cfg.SMTPFrom != "",
 	}
 	if problem := s.cfg.CheckRedirectURL(); problem != "" {
 		body["status"] = "degraded"

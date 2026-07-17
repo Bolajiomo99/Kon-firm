@@ -27,6 +27,18 @@ type Config struct {
 	AdminPhone    string
 	AdminName     string
 	AdminPassword string
+
+	// SMTP. Any provider: Gmail with an app password, Resend, Postmark, a
+	// company relay. Receipts are skipped (loudly) when unset rather than
+	// failing a payment.
+	SMTPHost     string
+	SMTPPort     string
+	SMTPUsername string
+	SMTPPassword string
+	SMTPFrom     string
+	// PublicURL builds the receipt link in the email. Derived from the
+	// redirect URL, which already has to be the real public address.
+	PublicURL string
 }
 
 // LoadDotEnv reads key=value pairs from path into the process environment.
@@ -106,6 +118,20 @@ func Load() (*Config, error) {
 		AdminPhone:          os.Getenv("KONFIRM_ADMIN_PHONE"),
 		AdminName:           os.Getenv("KONFIRM_ADMIN_NAME"),
 		AdminPassword:       os.Getenv("KONFIRM_ADMIN_PASSWORD"),
+		SMTPHost:            os.Getenv("SMTP_HOST"),
+		SMTPPort:            os.Getenv("SMTP_PORT"),
+		SMTPUsername:        os.Getenv("SMTP_USERNAME"),
+		SMTPPassword:        os.Getenv("SMTP_PASSWORD"),
+		SMTPFrom:            os.Getenv("SMTP_FROM"),
+	}
+
+	if c.SMTPPort == "" {
+		c.SMTPPort = "587" // submission with STARTTLS; what every provider expects
+	}
+	// The public base is whatever the redirect URL is rooted at, so there is
+	// one address to get right instead of two that can disagree.
+	if i := strings.Index(c.RedirectURL, "/payment/callback"); i > 0 {
+		c.PublicURL = c.RedirectURL[:i]
 	}
 
 	if c.AdminName == "" {
