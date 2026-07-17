@@ -404,17 +404,61 @@ a { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 3
 
 /* ---------- Cart ---------- */
 .cart-panel {
-  position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100%);
+  position: fixed; top: 0; right: 0; width: min(440px, 100%);
+  /* dvh, not vh: on iOS Safari 100vh is the height with the URL bar HIDDEN, so
+     a vh-sized panel is taller than the visible viewport and its last inches —
+     including the Checkout button — sit under the browser chrome, unreachable.
+     dvh tracks the bar as it collapses. The vh line is the fallback for
+     browsers without dvh. */
+  height: 100vh;
+  height: 100dvh;
   background: var(--bg-elevated); border-left: 1px solid var(--border);
   box-shadow: var(--shadow-lg); z-index: 250;
   display: flex; flex-direction: column;
   transform: translateX(100%); transition: transform .25s cubic-bezier(.4,0,.2,1);
 }
 .cart-panel[data-open="true"] { transform: translateX(0); }
-.cart-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid var(--border); }
+
+.cart-head {
+  flex: none;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px; border-bottom: 1px solid var(--border);
+}
 .cart-head h2 { margin: 0; font-size: 1.05rem; }
-.cart-items { flex: 1; overflow-y: auto; padding: 4px 20px; }
+
+/* The form fills the panel so its two children can divide the height. */
+.cart-form { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* One scroll region for everything that can grow.
+   min-height:0 is load-bearing: a flex child defaults to min-height:auto, which
+   refuses to shrink below its content, so the region would grow past the panel
+   instead of scrolling — which is exactly how the Checkout button ended up
+   off-screen on a phone. */
+.cart-scroll {
+  flex: 1; min-height: 0; overflow-y: auto;
+  /* Stop a scroll that reaches the end of this panel from continuing into the
+     page behind it. */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch; /* momentum on older iOS */
+}
+.cart-items { padding: 4px 20px; }
 .cart-foot { padding: 18px 20px; border-top: 1px solid var(--border); background: var(--bg-sunken); }
+
+/* Pinned pay bar. */
+.cart-pay {
+  flex: none;
+  padding: 14px 20px;
+  padding-bottom: max(14px, env(safe-area-inset-bottom)); /* iPhone home indicator */
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+  box-shadow: 0 -4px 16px rgb(9 9 11 / 0.06);
+}
+.pay-total {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 10px;
+}
+.pay-total span:first-child { color: var(--text-muted); font-size: .88rem; }
+.pay-total .amount { font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .cart-row { display: flex; gap: 12px; align-items: center; padding: 14px 0; }
 .cart-row + .cart-row { border-top: 1px solid var(--border); }
 .cart-thumb { width: 56px; height: 56px; border-radius: var(--radius-sm); object-fit: cover; flex: none; background: var(--ink-100); }
@@ -692,3 +736,31 @@ code.ref { font-family: var(--mono); font-size: 0.78rem; color: var(--text-muted
 }
 .order-line.strong span:first-child { color: var(--text); }
 .order-foot { padding: 12px 18px; border-top: 1px solid var(--border); }
+
+
+/* ---------- Mobile viewport hardening ---------- */
+
+/* Locks the page behind an open panel. position:fixed rather than
+   overflow:hidden because iOS Safari ignores overflow:hidden on body — the
+   page keeps scrolling under the panel, which reads as the panel refusing to
+   scroll. The top offset preserves the scroll position; JS restores it. */
+body.scroll-locked {
+  position: fixed;
+  left: 0; right: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* iOS zooms the page when a focused input is under 16px. On a checkout form
+   that jolts the layout mid-typing and looks broken. */
+@media (max-width: 860px) {
+  .field input, .field select, .field textarea { font-size: 16px; }
+}
+
+/* Tap targets: 44px is Apple's minimum, and a mis-tap on a payment form is
+   expensive. */
+@media (pointer: coarse) {
+  .qty button { width: 34px; height: 34px; }
+  .btn-sm { padding: 9px 14px; }
+  .theme-toggle button { width: 32px; height: 32px; }
+}

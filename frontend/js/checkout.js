@@ -71,6 +71,7 @@ export function renderTotals(q, els) {
   }
 
   els.total.textContent = formatKobo(q.totalKobo);
+  if (els.totalPinned) els.totalPinned.textContent = formatKobo(q.totalKobo);
 
   const pct = (q.vatRateBp / 100).toFixed(1).replace(/\.0$/, '');
   els.vat.textContent = `Includes VAT of ${formatKobo(q.vatKobo)} at ${pct}%`;

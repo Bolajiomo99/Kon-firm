@@ -51,6 +51,7 @@ const el = {
     discount: $('t-discount'),
     delivery: $('t-delivery'),
     total: $('cart-total'),
+    totalPinned: $('cart-total-pinned'),
     vat: $('t-vat'),
   },
 };
@@ -418,9 +419,21 @@ el.sort.addEventListener('change', () => {
 /* ---------- Bag ---------- */
 
 let lastFocused = null;
+let lockedScrollY = 0;
 
 function openCart() {
   lastFocused = document.activeElement;
+
+  // Lock the page behind the panel.
+  //
+  // Without this, a touch drag inside the bag scrolls the catalogue behind it
+  // instead — which reads as the bag being frozen. iOS Safari ignores
+  // overflow:hidden on body, so the page is pinned with position:fixed and its
+  // offset preserved, then restored on close.
+  lockedScrollY = window.scrollY;
+  document.body.style.top = `-${lockedScrollY}px`;
+  document.body.classList.add('scroll-locked');
+
   el.cart.dataset.open = 'true';
   el.cart.setAttribute('aria-hidden', 'false');
   el.backdrop.hidden = false;
@@ -430,6 +443,12 @@ function openCart() {
 }
 
 function closeCart() {
+  document.body.classList.remove('scroll-locked');
+  document.body.style.top = '';
+  // Restoring without smooth behaviour: the page should be where it was, not
+  // animate back to it.
+  window.scrollTo({ top: lockedScrollY, behavior: 'instant' });
+
   el.cart.dataset.open = 'false';
   el.cart.setAttribute('aria-hidden', 'true');
   el.backdrop.dataset.open = 'false';

@@ -116,13 +116,19 @@
     <h2 id="cart-title">Your bag</h2>
     <button class="btn btn-sm btn-secondary" id="cart-close" aria-label="Close bag">Close</button>
   </div>
-  <div class="cart-items" id="cart-items"></div>
-  <div class="cart-foot">
-    <div class="error-box" id="checkout-error" hidden role="alert"></div>
 
-    <form id="checkout-form" novalidate>
-      <!-- Shown only to guests; a signed-in shopper has already told us. -->
-      <div id="guest-fields" hidden>
+  <form id="checkout-form" class="cart-form" novalidate>
+    <!-- Everything that can grow lives in one scroll region. The bag used to
+         scroll only its items while the whole checkout form sat in a fixed
+         footer, so on a phone the Checkout button was below the fold with no
+         way to reach it. -->
+    <div class="cart-scroll" id="cart-scroll">
+      <div class="cart-items" id="cart-items"></div>
+
+      <div class="cart-foot">
+        <div class="error-box" id="checkout-error" hidden role="alert"></div>
+
+        <div id="guest-fields" hidden>
         <div class="field">
           <label for="name">Full name</label>
           <input id="name" name="name" autocomplete="name" placeholder="Zainab Wahab">
@@ -133,10 +139,9 @@
           <p class="hint">Your receipt goes here.</p>
         </div>
       </div>
+        <div id="signed-in-as" class="signed-as" hidden></div>
 
-      <div id="signed-in-as" class="signed-as" hidden></div>
-
-      <fieldset class="fieldset">
+        <fieldset class="fieldset">
         <legend>Delivery</legend>
         <div class="field">
           <label for="d-address">Address</label>
@@ -162,7 +167,7 @@
         <p class="hint" id="geo-hint"></p>
       </fieldset>
 
-      <fieldset class="fieldset">
+        <fieldset class="fieldset">
         <legend>Voucher</legend>
         <div class="voucher-row">
           <div class="field" style="flex:1;margin:0">
@@ -174,9 +179,9 @@
         <p class="hint" id="voucher-hint">Try WELCOME10 — 10% off orders over ₦20,000.</p>
       </fieldset>
 
-      <!-- Every figure below comes from the server, so the number here is the
-           number Monnify charges. -->
-      <div class="totals" id="totals">
+        <!-- Every figure here comes from the server, so the number in the bag
+             is the number Monnify charges. -->
+        <div class="totals" id="totals">
         <div class="totals-row"><span>Subtotal</span><span id="t-subtotal">₦0.00</span></div>
         <div class="totals-row" id="t-discount-row" hidden>
           <span id="t-discount-label">Discount</span><span id="t-discount">₦0.00</span>
@@ -184,14 +189,23 @@
         <div class="totals-row"><span>Delivery</span><span id="t-delivery">—</span></div>
         <div class="totals-row grand"><span>Total</span><span class="amount" id="cart-total">₦0.00</span></div>
         <p class="vat-note" id="t-vat">Includes VAT</p>
+        </div>
       </div>
+    </div>
 
+    <!-- Pinned: the total and the button must never be something you have to
+         scroll to find. -->
+    <div class="cart-pay">
+      <div class="pay-total">
+        <span>Total</span>
+        <span class="amount" id="cart-total-pinned">₦0.00</span>
+      </div>
       <button class="btn btn-block btn-lg" id="checkout-btn" type="submit">Checkout</button>
-    </form>
-    <p class="hint" style="text-align:center;margin-top:10px">
-      🔒 Card details never touch our servers.
-    </p>
-  </div>
+      <p class="hint" style="text-align:center;margin:8px 0 0">
+        🔒 Card details never touch our servers.
+      </p>
+    </div>
+  </form>
 </aside>
 
 <footer class="site-footer"></footer>
