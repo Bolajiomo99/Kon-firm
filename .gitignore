@@ -26,3 +26,6 @@ dist/
 
 # macOS
 .DS_Store
+
+# Working notes, not part of the submission
+demo-script.md
