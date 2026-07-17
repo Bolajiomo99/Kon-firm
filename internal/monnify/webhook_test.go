@@ -1,8 +1,10 @@
 package monnify
 
 import (
+	"encoding/json"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 // Cross-language fixture. Generated independently with Python:
@@ -225,4 +227,98 @@ func TestNewClient_RejectsKeyEnvironmentMismatch(t *testing.T) {
 			t.Errorf("BaseURL = %q, want sandbox default", c.cfg.BaseURL)
 		}
 	})
+}
+
+// TestParseWebhook_RealMonnifyPayload uses the exact payload shape from
+// Monnify's own documentation, including its "17/11/2021 3:48:10 PM"
+// timestamp.
+//
+// This is a regression test for a real production failure: the handler
+// returned 400 on every genuine notification because paidOn was decoded into
+// a plain time.Time, which encoding/json only fills from RFC 3339. Every
+// hand-written fixture passed, because fixtures get written in RFC 3339 out of
+// habit. Only a real delivery exposed it.
+func TestParseWebhook_RealMonnifyPayload(t *testing.T) {
+	raw := []byte(`{
+	  "eventData": {
+	    "product": {"reference": "111222333", "type": "OFFLINE_PAYMENT_AGENT"},
+	    "transactionReference": "MNFY|76|20211117154810|000001",
+	    "paymentReference": "0.01462001097368737",
+	    "paidOn": "17/11/2021 3:48:10 PM",
+	    "paymentDescription": "Mockaroo Jesse",
+	    "metaData": {},
+	    "destinationAccountInformation": {},
+	    "paymentSourceInformation": {},
+	    "amountPaid": 78000,
+	    "totalPayable": 78000,
+	    "offlineProductInformation": {"code": "41470", "type": "DYNAMIC"},
+	    "cardDetails": {},
+	    "paymentMethod": "CASH",
+	    "currency": "NGN",
+	    "settlementAmount": 77600,
+	    "paymentStatus": "PAID",
+	    "customer": {"name": "Mockaroo Jesse", "email": "customer@example.com"}
+	  },
+	  "eventType": "SUCCESSFUL_TRANSACTION"
+	}`)
+
+	ev, err := ParseWebhook(raw)
+	if err != nil {
+		t.Fatalf("ParseWebhook on a real Monnify payload: %v", err)
+	}
+	if ev.EventType != EventSuccessfulTransaction {
+		t.Fatalf("EventType = %q", ev.EventType)
+	}
+
+	d, err := ev.TransactionData()
+	if err != nil {
+		t.Fatalf("TransactionData on a real Monnify payload: %v", err)
+	}
+
+	if d.PaymentReference != "0.01462001097368737" {
+		t.Errorf("PaymentReference = %q", d.PaymentReference)
+	}
+	if d.AmountPaid != 78000 {
+		t.Errorf("AmountPaid = %v, want 78000", d.AmountPaid)
+	}
+	if d.SettlementAmount != 77600 {
+		t.Errorf("SettlementAmount = %v, want 77600 (fee is the difference)", d.SettlementAmount)
+	}
+	if d.PaymentStatus != "PAID" {
+		t.Errorf("PaymentStatus = %q", d.PaymentStatus)
+	}
+
+	// The whole point: this timestamp must decode.
+	if d.PaidOn.IsZero() {
+		t.Fatal("paidOn did not parse — this is the exact bug that 400'd every real webhook")
+	}
+	want := time.Date(2021, 11, 17, 15, 48, 10, 0, time.UTC)
+	if !d.PaidOn.Equal(want) {
+		t.Errorf("PaidOn = %v, want %v", d.PaidOn.Time, want)
+	}
+}
+
+func TestMonnifyTime_Formats(t *testing.T) {
+	cases := []struct {
+		in   string
+		zero bool
+	}{
+		{`"17/11/2021 3:48:10 PM"`, false},
+		{`"17/11/2021 15:48:10"`, false},
+		{`"2026-07-16T23:58:09Z"`, false},
+		{`"2026-07-16 23:58:09"`, false},
+		{`""`, true},
+		{`null`, true},
+		{`"not a timestamp at all"`, true}, // tolerated, not fatal
+	}
+	for _, c := range cases {
+		var tm Time
+		if err := json.Unmarshal([]byte(c.in), &tm); err != nil {
+			t.Errorf("Unmarshal(%s) errored: %v — an unreadable clock must never fail a payment", c.in, err)
+			continue
+		}
+		if tm.IsZero() != c.zero {
+			t.Errorf("Unmarshal(%s): IsZero = %v, want %v", c.in, tm.IsZero(), c.zero)
+		}
+	}
 }

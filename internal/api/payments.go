@@ -164,7 +164,12 @@ func (s *Server) handleMonnifyWebhook(w http.ResponseWriter, r *http.Request) {
 
 	event, err := monnify.ParseWebhook(rawBody)
 	if err != nil {
-		s.log.Error("parse webhook", "err", err)
+		// Log the body when a *signed* payload fails to parse. It came from
+		// Monnify, so the shape is the story: without this, a schema mismatch
+		// looks like a bare 400 and there is nothing to debug from. Safe to
+		// log — the signature already proved provenance, and a webhook body
+		// carries no secret material.
+		s.log.Error("parse webhook", "err", err, "body", truncateBody(rawBody))
 		writeError(w, http.StatusBadRequest, "malformed webhook")
 		return
 	}
@@ -181,22 +186,38 @@ func (s *Server) handleMonnifyWebhook(w http.ResponseWriter, r *http.Request) {
 
 	data, err := event.TransactionData()
 	if err != nil {
-		s.log.Error("decode transaction event", "err", err)
+		s.log.Error("decode transaction event", "err", err, "body", truncateBody(rawBody))
 		writeError(w, http.StatusBadRequest, "malformed transaction data")
 		return
 	}
 
-	success := event.EventType == monnify.EventSuccessfulTransaction && data.PaymentStatus == "PAID"
+	paidKobo := nairaToKobo(data.AmountPaid)
+	payableKobo := nairaToKobo(data.TotalPayable)
+
+	// An order settles only if Monnify says PAID *and* the money actually
+	// covers the bill. Trusting paymentStatus alone would let a short transfer
+	// mark an order paid — and both values here come from the signed payload,
+	// so neither can be forged.
+	success := event.EventType == monnify.EventSuccessfulTransaction &&
+		data.PaymentStatus == "PAID" &&
+		paidKobo >= payableKobo
+
+	if event.EventType == monnify.EventSuccessfulTransaction && data.PaymentStatus == "PAID" && !success {
+		s.log.Warn("underpayment refused",
+			"ref", data.PaymentReference, "paid_kobo", paidKobo, "payable_kobo", payableKobo)
+	}
 
 	order, err := s.store.ApplyWebhook(r.Context(), store.PaymentResult{
 		TransactionRef: data.TransactionReference,
 		PaymentRef:     data.PaymentReference,
 		EventType:      event.EventType,
-		AmountPaidKobo: nairaToKobo(data.AmountPaid),
+		AmountPaidKobo: paidKobo,
 		PaymentMethod:  data.PaymentMethod,
-		PaidAt:         data.PaidOn,
-		Success:        success,
-		RawPayload:     rawBody,
+		// Monnify's timestamp format varies; fall back to receipt time rather
+		// than storing a zero date.
+		PaidAt:     data.PaidOnOr(time.Now().UTC()),
+		Success:    success,
+		RawPayload: rawBody,
 	})
 
 	switch {
@@ -263,4 +284,14 @@ func (s *Server) handleProductByBarcode(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, p)
+}
+
+// truncateBody bounds a body for logging. Webhook payloads are small, but a
+// log line is not the place to discover otherwise.
+func truncateBody(b []byte) string {
+	const max = 2000
+	if len(b) <= max {
+		return string(b)
+	}
+	return string(b[:max]) + "...(truncated)"
 }

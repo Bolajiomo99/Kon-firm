@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -70,8 +71,8 @@ func VerifyRequest(secretKey string, r *http.Request, rawBody []byte) error {
 
 // Event types Monnify sends. SuccessfulTransaction is the one that moves money.
 const (
-	EventSuccessfulTransaction = "SUCCESSFUL_TRANSACTION"
-	EventFailedTransaction     = "FAILED_TRANSACTION"
+	EventSuccessfulTransaction  = "SUCCESSFUL_TRANSACTION"
+	EventFailedTransaction      = "FAILED_TRANSACTION"
 	EventSuccessfulDisbursement = "SUCCESSFUL_DISBURSEMENT"
 	EventFailedDisbursement     = "FAILED_DISBURSEMENT"
 	EventSettlement             = "SETTLEMENT"
@@ -83,21 +84,72 @@ type WebhookEvent struct {
 	EventData json.RawMessage `json:"eventData"`
 }
 
+// Time wraps time.Time to cope with Monnify's timestamp formats.
+//
+// encoding/json only unmarshals RFC 3339 into a time.Time, but Monnify sends
+// "17/11/2021 3:48:10 PM" on transaction webhooks. Decoding that into a plain
+// time.Time fails the whole payload — which manifests as a 400 on every real
+// notification while every hand-written test fixture passes, because fixtures
+// get written in RFC 3339 out of habit.
+//
+// An unparseable timestamp is never fatal here. Rejecting a confirmed payment
+// because we did not recognise its clock format would be absurd: the caller
+// falls back to the time of receipt.
+type Time struct{ time.Time }
+
+// Layouts Monnify has been observed to send, most specific first.
+var timeLayouts = []string{
+	"02/01/2006 3:04:05 PM", // documented on transaction webhooks
+	"02/01/2006 15:04:05",   // 24-hour variant
+	time.RFC3339,            // used elsewhere in the API
+	"2006-01-02T15:04:05.000Z0700",
+	"2006-01-02 15:04:05",
+}
+
+func (t *Time) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), `"`)
+	if s == "" || s == "null" {
+		return nil
+	}
+	for _, layout := range timeLayouts {
+		if parsed, err := time.Parse(layout, s); err == nil {
+			t.Time = parsed
+			return nil
+		}
+	}
+	// Deliberately not an error: leave the zero value and let the caller
+	// substitute the receipt time. A payment is not less confirmed because we
+	// could not read its timestamp.
+	return nil
+}
+
 // TransactionEventData is the payload for transaction events.
 type TransactionEventData struct {
-	TransactionReference string    `json:"transactionReference"`
-	PaymentReference     string    `json:"paymentReference"`
-	PaidOn               time.Time `json:"paidOn"`
-	PaymentStatus        string    `json:"paymentStatus"`
-	PaymentDescription   string    `json:"paymentDescription"`
-	AmountPaid           float64   `json:"amountPaid"`
-	TotalPayable         float64   `json:"totalPayable"`
-	Currency             string    `json:"currency"`
-	PaymentMethod        string    `json:"paymentMethod"`
-	Customer             struct {
+	TransactionReference string  `json:"transactionReference"`
+	PaymentReference     string  `json:"paymentReference"`
+	PaidOn               Time    `json:"paidOn"`
+	PaymentStatus        string  `json:"paymentStatus"`
+	PaymentDescription   string  `json:"paymentDescription"`
+	AmountPaid           float64 `json:"amountPaid"`
+	TotalPayable         float64 `json:"totalPayable"`
+	// SettlementAmount is what Monnify will actually settle to the merchant,
+	// i.e. AmountPaid minus Monnify's fee.
+	SettlementAmount float64 `json:"settlementAmount"`
+	Currency         string  `json:"currency"`
+	PaymentMethod    string  `json:"paymentMethod"`
+	Customer         struct {
 		Name  string `json:"name"`
 		Email string `json:"email"`
 	} `json:"customer"`
+}
+
+// PaidOnOr returns the parsed payment time, or fallback when Monnify sent a
+// timestamp we could not read.
+func (d *TransactionEventData) PaidOnOr(fallback time.Time) time.Time {
+	if d.PaidOn.IsZero() {
+		return fallback
+	}
+	return d.PaidOn.Time
 }
 
 // ParseWebhook decodes a verified webhook body.
@@ -124,14 +176,14 @@ func (e *WebhookEvent) TransactionData() (*TransactionEventData, error) {
 
 // TransactionStatus is the server-side view of a transaction.
 type TransactionStatus struct {
-	TransactionReference string  `json:"transactionReference"`
-	PaymentReference     string  `json:"paymentReference"`
-	PaymentStatus        string  `json:"paymentStatus"`
-	AmountPaid           string  `json:"amountPaid"`
-	TotalPayable         string  `json:"totalPayable"`
-	PaidOn               string  `json:"paidOn"`
-	PaymentMethod        string  `json:"paymentMethod"`
-	Currency             string  `json:"currency"`
+	TransactionReference string `json:"transactionReference"`
+	PaymentReference     string `json:"paymentReference"`
+	PaymentStatus        string `json:"paymentStatus"`
+	AmountPaid           string `json:"amountPaid"`
+	TotalPayable         string `json:"totalPayable"`
+	PaidOn               string `json:"paidOn"`
+	PaymentMethod        string `json:"paymentMethod"`
+	Currency             string `json:"currency"`
 }
 
 // Paid reports whether the transaction is settled and fully paid.
