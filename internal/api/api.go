@@ -80,6 +80,12 @@ func (s *Server) Routes(frontend fs.FS) http.Handler {
 	// Monnify calls this. It authenticates by signature, not by session.
 	mux.HandleFunc("POST /api/webhooks/monnify", s.handleMonnifyWebhook)
 
+	// Offline pay-ins. Monnify calls these server-to-server while a customer
+	// stands at a Moniepoint counter, so they carry no session — the order
+	// reference is the credential.
+	mux.HandleFunc("POST /api/offline/verify-payer", s.handlePayerVerification)
+	mux.HandleFunc("GET /api/offline/requery", s.handlePaymentRequery)
+
 	// Staff only. The POS is a shop-counter tool: barcode lookup exposes the
 	// catalogue keyed by barcode, and taking payment is not a public action.
 	mux.HandleFunc("GET /api/products/barcode/{barcode}", s.requireAdmin(s.handleProductByBarcode))
