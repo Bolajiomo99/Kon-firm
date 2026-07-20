@@ -285,14 +285,37 @@ func (s *Server) handleMonnifyWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch event.EventType {
-	case monnify.EventSuccessfulTransaction, monnify.EventFailedTransaction:
-		// handled below
-	case monnify.EventSuccessfulRefund, monnify.EventFailedRefund:
+	// Route by what the payload IS, not only by what the event is called.
+	//
+	// Monnify publishes an event named "Completed Offline Payments" for cash
+	// taken at a Moniepoint agent, but does not document the literal eventType
+	// string. An allow-list of names we guessed would silently drop it: the
+	// customer pays cash, Monnify tells us, we answer 200 "ignored", and their
+	// order stays pending forever with no error anywhere.
+	//
+	// That is exactly how the paidOn bug behaved — an assumption about their
+	// payload that looked fine until real traffic arrived. So the rule here is
+	//: a signed webhook carrying a PAID transaction settles the matching
+	// order, whatever the event is called.
+	switch {
+	case strings.Contains(event.EventType, "REFUND"):
 		s.applyRefundEvent(w, r, event, rawBody)
 		return
+
+	case event.EventType == monnify.EventSuccessfulTransaction,
+		event.EventType == monnify.EventFailedTransaction:
+		// Known, handled below.
+
 	default:
-		// Acknowledge events we do not act on, so Monnify stops retrying them.
+		// Unknown name. Decide by the body: does it describe a real payment
+		// against an order of ours?
+		if d, err := event.TransactionData(); err == nil &&
+			d.PaymentReference != "" && d.PaymentStatus == "PAID" {
+			s.log.Info("settling an unrecognised event that carries a paid transaction",
+				"type", event.EventType, "ref", d.PaymentReference)
+			break // fall through to the settlement path below
+		}
+		// Genuinely nothing to do — acknowledge so Monnify stops retrying.
 		s.log.Info("ignoring webhook event", "type", event.EventType)
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ignored"})
 		return
@@ -312,11 +335,14 @@ func (s *Server) handleMonnifyWebhook(w http.ResponseWriter, r *http.Request) {
 	// covers the bill. Trusting paymentStatus alone would let a short transfer
 	// mark an order paid — and both values here come from the signed payload,
 	// so neither can be forged.
-	success := event.EventType == monnify.EventSuccessfulTransaction &&
+	// A payment counts when Monnify says PAID and the money covers the bill —
+	// not when the event happens to carry a name we recognise. An explicit
+	// FAILED event is the one case that overrides a PAID status.
+	success := event.EventType != monnify.EventFailedTransaction &&
 		data.PaymentStatus == "PAID" &&
 		paidKobo >= payableKobo
 
-	if event.EventType == monnify.EventSuccessfulTransaction && data.PaymentStatus == "PAID" && !success {
+	if data.PaymentStatus == "PAID" && paidKobo < payableKobo {
 		s.log.Warn("underpayment refused",
 			"ref", data.PaymentReference, "paid_kobo", paidKobo, "payable_kobo", payableKobo)
 	}
