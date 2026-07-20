@@ -34,5 +34,6 @@ demo-script.md
 .*/launch.json
 .vscode/
 .idea/
-.claude/
 hikmah-tasks.md
+offline-test.sh
+monnify-messages.md
