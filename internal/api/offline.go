@@ -1,12 +1,16 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/Bolajiomo99/Kon-firm/internal/events"
+	"github.com/Bolajiomo99/Kon-firm/internal/monnify"
 	"github.com/Bolajiomo99/Kon-firm/internal/store"
 )
 
@@ -82,6 +86,10 @@ type requeryResponse struct {
 	// TransactionReference is Monnify's reference, arriving URL-encoded and
 	// decoded before it reaches us.
 	TransactionReference string `json:"transactionReference,omitempty"`
+	// PaymentToken is the value token a merchant issues for things like meter
+	// units. Kon-firm ships goods, so there is nothing to mint and this carries
+	// the order reference the customer already has.
+	PaymentToken string `json:"paymentToken,omitempty"`
 }
 
 // handlePayerVerification answers Monnify's real-time question: "someone is
@@ -158,6 +166,138 @@ func (s *Server) handlePayerVerification(w http.ResponseWriter, r *http.Request)
 		PaymentRecipientId:          order.Reference,
 		PaymentRecipientDescription: order.CustomerName,
 	})
+}
+
+type paymentRequest struct {
+	// Amount tolerates money arriving as either a JSON number or a quoted
+	// string, the same way webhook payloads do.
+	Amount               monnify.Amount `json:"amount"`
+	TransactionReference string         `json:"transactionReference"`
+	ProductCode          string         `json:"productCode"`
+	PaymentRecipientId   string         `json:"paymentRecipientId"`
+}
+
+// handlePaymentRequest is called after the agent has taken the cash.
+//
+// Its documented purpose is to hand back a "value token" — a meter number, an
+// airtime PIN. Kon-firm sells physical goods, so there is no token to mint and
+// the order reference serves as the receipt the customer already has.
+//
+// What this endpoint deliberately does NOT do is mark the order paid.
+//
+// It carries no signature. Anything arriving here is an unauthenticated claim
+// that money changed hands, and settling on it would let anyone who learned an
+// order reference mark that order paid without paying. So it does what the rest
+// of this project does with every payment claim: it asks Monnify. The reconcile
+// below verifies the transaction against Monnify's API, and only their answer
+// can settle the order.
+//
+// That is the same rule the webhook path follows, and the reason a browser
+// redirect saying "successful" has never been enough here either.
+func (s *Server) handlePaymentRequest(w http.ResponseWriter, r *http.Request) {
+	var req paymentRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, 8<<10)).Decode(&req); err != nil {
+		s.log.Warn("payment request: malformed body", "err", err)
+		writeJSON(w, http.StatusOK, requeryResponse{
+			ResponseCode:    offlineFailed,
+			ResponseMessage: "Could not read the request",
+		})
+		return
+	}
+
+	ref := strings.TrimSpace(req.PaymentRecipientId)
+	txRef := strings.TrimSpace(req.TransactionReference)
+	s.log.Info("offline payment request",
+		"recipient", ref, "monnifyRef", txRef, "kobo", req.Amount.Kobo())
+
+	order, err := s.store.OrderByReference(r.Context(), ref)
+	if err != nil {
+		writeJSON(w, http.StatusOK, requeryResponse{
+			ResponseCode:         offlineFailed,
+			ResponseMessage:      "User does not exist.",
+			TransactionReference: txRef,
+		})
+		return
+	}
+
+	// Confirm with Monnify out of band. The agent's terminal must not wait on
+	// our reconciliation, and their answer — not this request — is what settles
+	// the order.
+	if txRef != "" {
+		go s.reconcileOfflineTransaction(order.Reference, txRef)
+	}
+
+	writeJSON(w, http.StatusOK, requeryResponse{
+		ResponseCode:         offlineOK,
+		ResponseMessage:      "Payment request received",
+		ProductCode:          req.ProductCode,
+		PaymentRecipientId:   order.Reference,
+		TransactionReference: txRef,
+		// No meter token to issue; the order reference is the receipt.
+		PaymentToken: order.Reference,
+	})
+}
+
+// reconcileOfflineTransaction settles a cash payment against Monnify's own
+// record of it.
+//
+// It runs detached from the agent's request, so it takes a fresh context: the
+// terminal gets its answer immediately and the customer is not left standing at
+// a counter while we talk to an API.
+//
+// Settlement goes through the same ledger as every other path, so a webhook
+// arriving for this transaction cannot credit the order a second time.
+func (s *Server) reconcileOfflineTransaction(orderRef, txRef string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	tx, err := s.monnify.VerifyByTransactionReference(ctx, txRef)
+	if err != nil {
+		s.log.Warn("offline reconcile: verification failed",
+			"ref", orderRef, "monnifyRef", txRef, "err", err)
+		return
+	}
+	if !tx.Paid() {
+		s.log.Info("offline reconcile: Monnify does not report this as paid",
+			"ref", orderRef, "monnifyRef", txRef, "status", tx.PaymentStatus)
+		return
+	}
+
+	order, err := s.store.OrderByReference(ctx, orderRef)
+	if err != nil {
+		return
+	}
+
+	paidKobo := tx.AmountPaid.Kobo()
+	if paidKobo < order.TotalKobo {
+		s.log.Warn("offline reconcile: underpayment refused",
+			"ref", orderRef, "paid_kobo", paidKobo, "owed_kobo", order.TotalKobo)
+		return
+	}
+
+	raw, _ := json.Marshal(tx)
+	settled, err := s.store.ApplyWebhook(ctx, store.PaymentResult{
+		TransactionRef: tx.TransactionReference,
+		PaymentRef:     order.Reference,
+		EventType:      "OFFLINE_PAYMENT_REQUEST",
+		AmountPaidKobo: paidKobo,
+		PaymentMethod:  tx.PaymentMethod,
+		PaidAt:         tx.PaidOnOr(time.Now().UTC()),
+		Success:        true,
+		RawPayload:     raw,
+	})
+	if errors.Is(err, store.ErrAlreadyProcessed) {
+		return // a webhook beat us to it, which is fine
+	}
+	if err != nil {
+		s.log.Error("offline reconcile: settle failed", "ref", orderRef, "err", err)
+		return
+	}
+
+	s.log.Info("order settled from cash at a Moniepoint agent",
+		"ref", settled.Reference, "amount_kobo", paidKobo)
+	s.events.PublishOrder(events.TypeOrderPaid, settled.Reference, settled)
+	s.sendReceipt(ctx, settled)
 }
 
 // handleOfflineProbe answers a browser GET on the payer verification URL.

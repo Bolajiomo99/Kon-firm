@@ -194,3 +194,50 @@ func TestRequeryMatchesDocumentedShape(t *testing.T) {
 		}
 	})
 }
+
+// TestPaymentRequestMatchesDocumentedShape pins the payment-request response.
+//
+// Monnify's own documented sample for this endpoint has a typo — a missing
+// comma and a doubled brace in paymentRecipientId — so it is reproduced here
+// corrected rather than verbatim, with the field names left exactly as
+// published.
+func TestPaymentRequestMatchesDocumentedShape(t *testing.T) {
+	const docSuccess = `{
+    "responseCode": "00",
+    "productCode": "121221212",
+    "paymentRecipientId": "LAHRAY101",
+    "transactionReference": "MNFY|66|20210825115615|000002",
+    "paymentToken": "KF-1784623165-604c64c050e41410"
+}`
+	var got requeryResponse
+	if err := json.Unmarshal([]byte(docSuccess), &got); err != nil {
+		t.Fatalf("their documented response must decode: %v", err)
+	}
+	if want, have := keysOfJSON(t, docSuccess), keysOf(t, got); !reflect.DeepEqual(want, have) {
+		t.Errorf("field names differ:\n  want %v\n  got  %v", want, have)
+	}
+	if got.PaymentToken == "" {
+		t.Error("paymentToken must survive the round trip")
+	}
+}
+
+// TestPaymentRequestDecodesDocumentedRequest uses Monnify's request body, which
+// sends the amount as a bare number here but as a quoted string on webhooks.
+// Both must decode.
+func TestPaymentRequestDecodesDocumentedRequest(t *testing.T) {
+	for _, raw := range []string{
+		`{"amount":200,"transactionReference":"MNFY|66|20210825115615|000002","productCode":"P1","paymentRecipientId":"LAHRAY101"}`,
+		`{"amount":"200.00","transactionReference":"MNFY|66|20210825115615|000002","productCode":"P1","paymentRecipientId":"LAHRAY101"}`,
+	} {
+		var req paymentRequest
+		if err := json.Unmarshal([]byte(raw), &req); err != nil {
+			t.Fatalf("must decode %s: %v", raw, err)
+		}
+		if req.Amount.Kobo() != 20000 {
+			t.Errorf("amount = %d kobo, want 20000, from %s", req.Amount.Kobo(), raw)
+		}
+		if req.PaymentRecipientId != "LAHRAY101" {
+			t.Errorf("PaymentRecipientId = %q", req.PaymentRecipientId)
+		}
+	}
+}

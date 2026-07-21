@@ -85,6 +85,7 @@ func (s *Server) Routes(frontend fs.FS) http.Handler {
 	// reference is the credential.
 	mux.HandleFunc("POST /api/offline/verify-payer", s.handlePayerVerification)
 	mux.HandleFunc("GET /api/offline/verify-payer", s.handleOfflineProbe)
+	mux.HandleFunc("POST /api/offline/payment-request", s.handlePaymentRequest)
 	mux.HandleFunc("GET /api/offline/requery", s.handlePaymentRequery)
 
 	// Staff only. The POS is a shop-counter tool: barcode lookup exposes the
