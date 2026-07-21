@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -373,6 +374,33 @@ func (s *Store) ApplyWebhook(ctx context.Context, r PaymentResult) (*Order, erro
 		return nil, err
 	}
 	return &o, nil
+}
+
+// OrderByTransactionRef loads an order by MONNIFY's reference rather than ours.
+//
+// Almost everything in this codebase looks orders up by our own reference. The
+// offline requery endpoint is the exception: Monnify asks "what happened to
+// MNFY|44|20220407112123|000684?", which is their identifier, and the only
+// place it exists on our side is the transaction_ref we recorded when the
+// payment settled.
+//
+// An order that has never been paid has an empty transaction_ref, so the
+// emptiness guard matters: without it, a requery carrying a blank reference
+// would match an arbitrary unpaid order.
+func (s *Store) OrderByTransactionRef(ctx context.Context, txRef string) (*Order, error) {
+	if strings.TrimSpace(txRef) == "" {
+		return nil, ErrNotFound
+	}
+	var ref string
+	err := s.pool.QueryRow(ctx,
+		`SELECT reference FROM orders WHERE transaction_ref = $1`, txRef).Scan(&ref)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return s.OrderByReference(ctx, ref)
 }
 
 // OrderByReference loads an order and its items.

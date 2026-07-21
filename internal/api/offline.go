@@ -25,10 +25,16 @@ import (
 // Response codes are Monnify's, not ours: "00" means proceed, anything else
 // means stop. They are strings, not integers — "00" and "0" are different
 // values to their POS.
+//
+// The two non-zero codes are not interchangeable, and the docs use them on
+// different endpoints: payer verification answers "02" when the payer does not
+// exist, while the requery endpoint answers "01" for a general failure. An
+// earlier version of this file used "01" for "not found" on both, which is the
+// wrong code on the one endpoint that is mandatory.
 const (
-	offlineOK       = "00"
-	offlineNotFound = "01"
-	offlineError    = "02"
+	offlineOK      = "00" // proceed, take the cash
+	offlineFailed  = "01" // requery/payment-request: this attempt failed
+	offlineNoPayer = "02" // payer verification: do not take the cash
 )
 
 type payerVerificationRequest struct {
@@ -40,14 +46,42 @@ type payerVerificationRequest struct {
 	PaymentRecipientId string `json:"paymentRecipientId"`
 }
 
+// payerVerificationResponse is Monnify's shape, copied field-for-field from
+// their offline pay-ins guide. The names are theirs and cannot be improved on:
+// this struct is parsed by their POS, not by us.
+//
+// It is the MERCHANT_INVOICE variant, which carries `amount`. That product type
+// lets the merchant set the price per payer at verification time — which is
+// exactly what a shopping basket is. A Fixed product would force every order to
+// cost the same, and a Variable product would let the customer type in any
+// number they liked.
 type payerVerificationResponse struct {
 	ResponseCode    string `json:"responseCode"`
 	ResponseMessage string `json:"responseMessage"`
-	PayerName       string `json:"payerName,omitempty"`
-	// Amount is required for MERCHANT_INVOICE products: it is what the agent
-	// will collect. In kobo? No — Monnify expects naira here, which is why it
-	// is converted at this boundary and nowhere else.
+	// Amount is what the agent will collect. In kobo? No — Monnify expects
+	// naira here, which is why it is converted at this boundary and nowhere
+	// else in the codebase.
 	Amount float64 `json:"amount,omitempty"`
+	// PaymentRecipientId is echoed back so their POS can match the answer to
+	// the question it asked.
+	PaymentRecipientId string `json:"paymentRecipientId,omitempty"`
+	// PaymentRecipientDescription is what the agent reads off the terminal to
+	// confirm they have the right person before taking money. NOT "payerName",
+	// which is a field this file used to invent.
+	PaymentRecipientDescription string `json:"paymentRecipientDescription,omitempty"`
+}
+
+// requeryResponse answers "what happened to this transaction?" and has a
+// different shape from payer verification — it is keyed on Monnify's
+// transaction reference, not on ours.
+type requeryResponse struct {
+	ResponseCode       string `json:"responseCode"`
+	ResponseMessage    string `json:"responseMessage,omitempty"`
+	ProductCode        string `json:"productCode,omitempty"`
+	PaymentRecipientId string `json:"paymentRecipientId,omitempty"`
+	// TransactionReference is Monnify's reference, arriving URL-encoded and
+	// decoded before it reaches us.
+	TransactionReference string `json:"transactionReference,omitempty"`
 }
 
 // handlePayerVerification answers Monnify's real-time question: "someone is
@@ -66,7 +100,7 @@ func (s *Server) handlePayerVerification(w http.ResponseWriter, r *http.Request)
 		// terminal guessing.
 		s.log.Warn("payer verification: malformed request", "err", err)
 		writeJSON(w, http.StatusOK, payerVerificationResponse{
-			ResponseCode:    offlineError,
+			ResponseCode:    offlineNoPayer,
 			ResponseMessage: "Could not read the request",
 		})
 		return
@@ -75,30 +109,31 @@ func (s *Server) handlePayerVerification(w http.ResponseWriter, r *http.Request)
 	ref := strings.TrimSpace(req.PaymentRecipientId)
 	s.log.Info("payer verification", "product", req.ProductCode, "recipient", ref)
 
-	if ref == "" {
+	// refuse answers with the code that tells the agent to stop. Every branch
+	// echoes the reference back so their POS can match answer to question.
+	refuse := func(msg string) {
 		writeJSON(w, http.StatusOK, payerVerificationResponse{
-			ResponseCode:    offlineNotFound,
-			ResponseMessage: "No order reference supplied",
+			ResponseCode:       offlineNoPayer,
+			ResponseMessage:    msg,
+			PaymentRecipientId: ref,
 		})
+	}
+
+	if ref == "" {
+		refuse("No order reference supplied")
 		return
 	}
 
 	order, err := s.store.OrderByReference(r.Context(), ref)
 	if errors.Is(err, store.ErrNotFound) {
-		writeJSON(w, http.StatusOK, payerVerificationResponse{
-			ResponseCode:    offlineNotFound,
-			ResponseMessage: "No order with that reference",
-		})
+		refuse("User does not exist.")
 		return
 	}
 	if err != nil {
 		s.log.Error("payer verification: lookup failed", "err", err, "ref", ref)
 		// Our fault, not the customer's. Tell the agent to stop rather than
 		// take cash against an order we cannot read.
-		writeJSON(w, http.StatusOK, payerVerificationResponse{
-			ResponseCode:    offlineError,
-			ResponseMessage: "Could not check that order, please try again",
-		})
+		refuse("Could not check that order, please try again")
 		return
 	}
 
@@ -107,26 +142,21 @@ func (s *Server) handlePayerVerification(w http.ResponseWriter, r *http.Request)
 	// means a refund and an apology.
 	switch order.Status {
 	case "paid":
-		writeJSON(w, http.StatusOK, payerVerificationResponse{
-			ResponseCode:    offlineNotFound,
-			ResponseMessage: "This order is already paid",
-		})
+		refuse("This order is already paid")
 		return
 	case "refunded", "failed", "expired":
-		writeJSON(w, http.StatusOK, payerVerificationResponse{
-			ResponseCode:    offlineNotFound,
-			ResponseMessage: "This order is closed",
-		})
+		refuse("This order is closed")
 		return
 	}
 
 	writeJSON(w, http.StatusOK, payerVerificationResponse{
 		ResponseCode:    offlineOK,
-		ResponseMessage: "Payer exists",
-		PayerName:       order.CustomerName,
+		ResponseMessage: "User details retrieved successfully.",
 		// Naira, not kobo. Monnify's field is a decimal amount and this is the
 		// one place in the codebase money leaves integer arithmetic.
-		Amount: float64(order.TotalKobo) / 100,
+		Amount:                      float64(order.TotalKobo) / 100,
+		PaymentRecipientId:          order.Reference,
+		PaymentRecipientDescription: order.CustomerName,
 	})
 }
 
@@ -145,8 +175,15 @@ func (s *Server) handleOfflineProbe(w http.ResponseWriter, r *http.Request) {
 		"endpoint": "payer verification",
 		"method":   "POST",
 		"expects":  payerVerificationRequest{ProductCode: "<offline product code>", PaymentRecipientId: "<order reference>"},
-		"returns":  payerVerificationResponse{ResponseCode: "00", ResponseMessage: "Payer exists", PayerName: "<customer>", Amount: 0},
-		"note":     "This URL is live and answers POST. A browser sends GET, hence this message.",
+		"returns": payerVerificationResponse{
+			ResponseCode:                "00",
+			ResponseMessage:             "User details retrieved successfully.",
+			Amount:                      2000,
+			PaymentRecipientId:          "<order reference>",
+			PaymentRecipientDescription: "<customer name>",
+		},
+		"productType": "MERCHANT_INVOICE",
+		"note":        "This URL is live and answers POST. A browser sends GET, hence this message.",
 	})
 }
 
@@ -156,32 +193,44 @@ func (s *Server) handleOfflineProbe(w http.ResponseWriter, r *http.Request) {
 // Optional in their spec, implemented because the alternative is an agent who
 // took cash and cannot tell the customer whether it counted.
 func (s *Server) handlePaymentRequery(w http.ResponseWriter, r *http.Request) {
+	// Monnify sends its own reference URL-encoded — "MNFY%7C44%7C..." — and the
+	// docs say to decode it. net/http has already done that by the time Query()
+	// returns, so the pipes are back. Decoding again here would be wrong.
 	ref := strings.TrimSpace(r.URL.Query().Get("transactionReference"))
 	if ref == "" {
-		writeJSON(w, http.StatusOK, payerVerificationResponse{
-			ResponseCode:    offlineError,
+		writeJSON(w, http.StatusOK, requeryResponse{
+			ResponseCode:    offlineFailed,
 			ResponseMessage: "transactionReference is required",
 		})
 		return
 	}
 
-	order, err := s.store.OrderByReference(r.Context(), ref)
+	// The reference here is Monnify's, not ours, so look up by what we recorded
+	// against the order when the payment settled.
+	order, err := s.store.OrderByTransactionRef(r.Context(), ref)
 	if err != nil {
-		writeJSON(w, http.StatusOK, payerVerificationResponse{
-			ResponseCode:    offlineNotFound,
-			ResponseMessage: "Unknown transaction",
+		writeJSON(w, http.StatusOK, requeryResponse{
+			ResponseCode:         offlineFailed,
+			ResponseMessage:      "Unknown transaction",
+			TransactionReference: ref,
 		})
 		return
 	}
 
-	code, msg := offlineNotFound, "Not paid"
-	if order.Status == "paid" {
-		code, msg = offlineOK, "Paid"
+	if order.Status != "paid" {
+		writeJSON(w, http.StatusOK, requeryResponse{
+			ResponseCode:         offlineFailed,
+			ResponseMessage:      "Payment not completed",
+			PaymentRecipientId:   order.Reference,
+			TransactionReference: ref,
+		})
+		return
 	}
-	writeJSON(w, http.StatusOK, payerVerificationResponse{
-		ResponseCode:    code,
-		ResponseMessage: msg,
-		PayerName:       order.CustomerName,
-		Amount:          float64(order.TotalKobo) / 100,
+
+	writeJSON(w, http.StatusOK, requeryResponse{
+		ResponseCode:         offlineOK,
+		ResponseMessage:      "Payment successful",
+		PaymentRecipientId:   order.Reference,
+		TransactionReference: ref,
 	})
 }
