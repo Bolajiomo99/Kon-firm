@@ -327,7 +327,7 @@ Stated plainly, because a submission that hides them is worse than one that does
 - **Settlement status isn't tracked.** Monnify settles to the merchant on its own schedule; Kon-firm records that a payment was *confirmed*, not that it was *paid out*.
 - **Live updates are in-process.** With more than one instance, a client connected to instance A misses events published on B. The page stays correct — it just updates on next fetch instead of instantly. Redis would fix it; one instance doesn't need it.
 - **Product photography is served from Unsplash** under its licence. Every URL is verified to return 200, and each image degrades to a labelled placeholder if the CDN is unreachable — but it is a third-party dependency.
-- **No AI.** Deliberate. The rules encourage it and warn that "AI slop is greatly frowned upon"; a bolted-on assistant would have been slop.
+- **No AI features in the product.** Deliberate. The rules encourage AI and warn that "AI slop is greatly frowned upon"; a bolted-on chat assistant would have been slop. There is no model call anywhere in the running system — a shop owner's stock count and a customer's payment status are not things to be guessed at. (AI tools *were* used while writing this, as disclosed on our submission. The judgement about what belongs in the product is a separate question from what helped build it.)
 - **Sandbox only**, per the challenge rules.
 
 ## Licence
