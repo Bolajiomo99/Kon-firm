@@ -130,6 +130,26 @@ func (s *Server) handlePayerVerification(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+// handleOfflineProbe answers a browser GET on the payer verification URL.
+//
+// Monnify calls that endpoint with POST. A GET would otherwise fall through to
+// the storefront's 404 page — and the first thing anyone does when handed an
+// integration URL is paste it into a browser. Someone checking whether we are
+// ready would see "That page isn't here" and conclude we had not built it.
+//
+// So this exists purely so that a human pointing a browser at us gets told the
+// truth: the endpoint is live, and it wants a POST.
+func (s *Server) handleOfflineProbe(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":   "ready",
+		"endpoint": "payer verification",
+		"method":   "POST",
+		"expects":  payerVerificationRequest{ProductCode: "<offline product code>", PaymentRecipientId: "<order reference>"},
+		"returns":  payerVerificationResponse{ResponseCode: "00", ResponseMessage: "Payer exists", PayerName: "<customer>", Amount: 0},
+		"note":     "This URL is live and answers POST. A browser sends GET, hence this message.",
+	})
+}
+
 // handlePaymentRequery answers "what happened to this transaction?" when
 // Monnify's POS lost the outcome — a network drop mid-payment, typically.
 //
