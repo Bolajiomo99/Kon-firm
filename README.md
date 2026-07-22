@@ -314,7 +314,7 @@ Single Go binary. [`render.yaml`](render.yaml) is included:
 
 > The dashboard toggle must be on **Test Mode** when you save the webhook. Webhook URLs are per-environment; saving it in Live mode means sandbox payments never call you.
 
-**Free tier sleeps after ~15 min idle** — a cold start takes ~30–50s. Hit the URL a minute before a demo. It doesn't affect webhooks (Monnify retries), but a sleeping app looks broken when it isn't.
+**Staying awake on the free tier** — Render's free tier sleeps after ~15 min of inactivity, but we use [UptimeRobot](https://uptimerobot.com/) to ping the app regularly, so it stays warm and responds instantly.
 
 ---
 
