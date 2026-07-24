@@ -285,6 +285,10 @@ func (s *Server) reconcileOfflineTransaction(orderRef, txRef string) {
 		PaidAt:         tx.PaidOnOr(time.Now().UTC()),
 		Success:        true,
 		RawPayload:     raw,
+		// The cash transaction is a different Monnify transaction from the
+		// online checkout this order was created with. Move the stored
+		// reference to the one that was actually paid.
+		OverrideTransactionRef: true,
 	})
 	if errors.Is(err, store.ErrAlreadyProcessed) {
 		return // a webhook beat us to it, which is fine

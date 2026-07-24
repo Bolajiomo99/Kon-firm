@@ -199,6 +199,102 @@ func TestApplyWebhook_IsIdempotent(t *testing.T) {
 	}
 }
 
+// TestApplyWebhook_OfflineOverridesTransactionRef proves an offline cash
+// settlement moves the order's stored reference to the transaction that was
+// actually paid.
+//
+// An offline order is created with the reference of its (abandoned) online
+// checkout, then paid via a DIFFERENT Monnify transaction at an agent. Without
+// the override the order keeps pointing at the checkout reference — which
+// verifies as PENDING against Monnify — so a genuinely-paid order looks unpaid
+// to anyone auditing by that reference. This is the bug that hid one real
+// payment inside an integrity sweep.
+func TestApplyWebhook_OfflineOverridesTransactionRef(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	pid := seedProduct(t, s, 10)
+
+	ref := fmt.Sprintf("KF-OFF-%d", time.Now().UnixNano())
+	checkoutRef := "MNFY|84|ONLINE|" + ref // set at checkout, then abandoned
+	cashRef := "MNFY|65|CASH|" + ref       // the transaction actually paid
+	cleanupOrder(t, s, checkoutRef)
+	cleanupOrder(t, s, cashRef)
+	cleanupOrder(t, s, ref)
+
+	if _, err := createTestOrder(t, s, ref, "Cash Payer", "cash@example.com", "online",
+		[]CreateOrderLine{{ProductID: pid, Quantity: 1}}); err != nil {
+		t.Fatalf("CreateOrder: %v", err)
+	}
+	// Give it the checkout reference, as init-transaction would.
+	if _, err := s.Pool().Exec(ctx,
+		`UPDATE orders SET transaction_ref = $2 WHERE reference = $1`, ref, checkoutRef); err != nil {
+		t.Fatal(err)
+	}
+
+	o, err := s.ApplyWebhook(ctx, PaymentResult{
+		TransactionRef:         cashRef,
+		PaymentRef:             ref,
+		EventType:              "OFFLINE_PAYMENT_REQUEST",
+		AmountPaidKobo:         500000,
+		PaymentMethod:          "CASH",
+		PaidAt:                 time.Now().UTC(),
+		Success:                true,
+		RawPayload:             []byte(`{"offline":true}`),
+		OverrideTransactionRef: true,
+	})
+	if err != nil {
+		t.Fatalf("ApplyWebhook: %v", err)
+	}
+	if o.Status != "paid" {
+		t.Fatalf("Status = %q, want paid", o.Status)
+	}
+	if o.TransactionRef != cashRef {
+		t.Errorf("TransactionRef = %q, want the cash transaction %q — a paid order must reference what was paid",
+			o.TransactionRef, cashRef)
+	}
+}
+
+// TestApplyWebhook_OnlineKeepsOriginalTransactionRef is the other half: the
+// default path must NOT move the reference, or a redelivered webhook carrying a
+// blank or altered ref could rewrite a settled order's identity.
+func TestApplyWebhook_OnlineKeepsOriginalTransactionRef(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	pid := seedProduct(t, s, 10)
+
+	ref := fmt.Sprintf("KF-ON-%d", time.Now().UnixNano())
+	txRef := "MNFY|10|ONLINE|" + ref
+	cleanupOrder(t, s, txRef)
+	cleanupOrder(t, s, ref)
+
+	if _, err := createTestOrder(t, s, ref, "Card Payer", "card@example.com", "online",
+		[]CreateOrderLine{{ProductID: pid, Quantity: 1}}); err != nil {
+		t.Fatalf("CreateOrder: %v", err)
+	}
+	if _, err := s.Pool().Exec(ctx,
+		`UPDATE orders SET transaction_ref = $2 WHERE reference = $1`, ref, txRef); err != nil {
+		t.Fatal(err)
+	}
+
+	o, err := s.ApplyWebhook(ctx, PaymentResult{
+		TransactionRef: txRef,
+		PaymentRef:     ref,
+		EventType:      "SUCCESSFUL_TRANSACTION",
+		AmountPaidKobo: 500000,
+		PaymentMethod:  "CARD",
+		PaidAt:         time.Now().UTC(),
+		Success:        true,
+		RawPayload:     []byte(`{"eventType":"SUCCESSFUL_TRANSACTION"}`),
+		// OverrideTransactionRef left false.
+	})
+	if err != nil {
+		t.Fatalf("ApplyWebhook: %v", err)
+	}
+	if o.TransactionRef != txRef {
+		t.Errorf("TransactionRef = %q, want unchanged %q", o.TransactionRef, txRef)
+	}
+}
+
 // TestApplyWebhook_ConcurrentReplays hammers the same event from many
 // goroutines. A check-then-act implementation passes the sequential test above
 // and fails this one.

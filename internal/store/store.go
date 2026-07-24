@@ -287,6 +287,16 @@ type PaymentResult struct {
 	PaidAt         time.Time
 	Success        bool
 	RawPayload     []byte
+	// OverrideTransactionRef replaces the order's stored reference with
+	// TransactionRef instead of only filling it when empty.
+	//
+	// Online payments settle against the same reference the order was created
+	// with, so the default COALESCE is right for them. An offline cash payment
+	// is a DIFFERENT Monnify transaction from the abandoned online checkout, and
+	// its reference is the one that actually got paid — so for offline the
+	// stored reference must move to it, or the order looks unpaid to anyone who
+	// verifies it against Monnify by the reference we kept.
+	OverrideTransactionRef bool
 }
 
 // ApplyWebhook records an event and settles the order in one transaction.
@@ -337,12 +347,12 @@ func (s *Store) ApplyWebhook(ctx context.Context, r PaymentResult) (*Order, erro
 			amount_paid_kobo = $3,
 			payment_method = $4,
 			paid_at = CASE WHEN $2::order_status = 'paid' THEN $5::timestamptz ELSE NULL END,
-			transaction_ref = COALESCE(transaction_ref, $6)
+			transaction_ref = CASE WHEN $7 THEN $6 ELSE COALESCE(transaction_ref, $6) END
 		WHERE reference = $1 AND status = 'pending'
 		RETURNING id, reference, COALESCE(transaction_ref,''), customer_name, customer_email,
 		          total_kobo, status::text, channel::text, amount_paid_kobo,
 		          payment_method, created_at, paid_at`,
-		r.PaymentRef, status, r.AmountPaidKobo, r.PaymentMethod, r.PaidAt, r.TransactionRef).
+		r.PaymentRef, status, r.AmountPaidKobo, r.PaymentMethod, r.PaidAt, r.TransactionRef, r.OverrideTransactionRef).
 		Scan(&o.ID, &o.Reference, &o.TransactionRef, &o.CustomerName, &o.CustomerEmail,
 			&o.TotalKobo, &o.Status, &o.Channel, &o.AmountPaidKobo,
 			&o.PaymentMethod, &o.CreatedAt, &o.PaidAt)
